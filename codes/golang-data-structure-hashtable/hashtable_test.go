@@ -8,7 +8,7 @@ import (
 func generateHashTable(count int, start int) *ValueHashTable {
 	ht := ValueHashTable{}
 	for i := start; i < (start + count); i++ {
-		ht.Put(fmt.Sprintf("key%d", i), fmt.Sprintf("key%d", i))
+		ht.Put(fmt.Sprintf("key%d", i), fmt.Sprintf("value%d", i))
 	}
 	return &ht
 }
