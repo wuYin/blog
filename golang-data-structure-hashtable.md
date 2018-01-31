@@ -1,10 +1,10 @@
 ---
 title: golang-data-structure-hashtable
 date: 2018-01-31 08:58:53
-tags:data structure
+tags: data structure
 ---
 
-Golang 中链表的实现及常用操作，数据结构系列原文：[flaviocopes.com](https://flaviocopes.com/golang-data-structure-linked-list/)，翻译已获作者授权。
+Golang 中链表的实现及常用操作，数据结构系列原文：[flaviocopes.com](https://flaviocopes.com/golang-data-structures/)，翻译已获作者授权。
 
 <!-- more -->
 
