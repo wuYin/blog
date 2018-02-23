@@ -303,7 +303,7 @@ func (t *testing.T) Fatal(args ...interface{})	// Log() & FailNow()
 
 - unsafe：包含 Go 在数据类型上不安全的操作，一般不使用
 
-- reflect：实现运行时反射，常使用 Typeof 来解析值的动态类型信息
+- reflect：实现运行时反射，常使用 TypeOf 来解析值的动态类型信息
 
   ​
 
@@ -410,15 +410,81 @@ func main() {
 
 
 
+### 接口
+
+#### 定义及优势
+
+interface 类型仅是方法的集合：
+
+```go
+type I interface {
+	Get() int
+	Set(int)
+}
+```
+
+结构体 S 实现了接口 I：
+
+```go
+type S struct {
+	i int
+}
+
+func (s *S) Get() int {
+	return s.i
+}
+
+func (s *S) Set(v int) {
+	s.i = v
+}
+```
+
+接口的优势，使用接口值（duck typing 模式）：
+
+```go
+// 所有实现了接口 I 的结构体均可被 f() 调用
+func f(p I) {
+	println(p.Get())
+	p.Set(0)
+}
+
+func main() {
+	var s = S{1}	
+    f(s)	// error: cannot use s (type S) as type I in argument to f
+    		// S does not implement I (Get method has pointer receiver)
+
+    f(&s)	// S 是 I 具体实现的一种，想要 Set() 生效必须传递地址    	
+}
+```
+
+命名：只含单个方法的接口一般加上 er 后缀，如：Writer、Reader、Formatter 等
+
+
+
+#### 类型判断
+
+再添加一个实现 I 接口的结构体：
+
+```go
+type P struct { i int }
+func (p *P) Get() int {	return p.i }
+func (p *P) Set(v int) { p.i = v }
+```
+
+在函数 f 中可通过 type-switch 获取参数类型：
+
+```go
+func f(p I) {
+	switch p.(type) {	// 在 switch 中使用类型判断
+        case *S:	// 参数是 *S 类型
+        case *P:
+	    default: 	// 参数是其他实现 I 接口的类型
+	}
+}
+```
 
 
 
 
 
-
-
-
-
-
-
-
+#### 
