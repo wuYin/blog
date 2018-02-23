@@ -487,4 +487,73 @@ func f(p I) {
 
 
 
+### 并发：
+
+#### goroutine
+
+使用 go 关键字将函数作为 goroutine 执行时，将作为占用资源很少的协程运行。
+
+其中 goroutine 是否真正的并行运行，取决于设置使用的 CPU 数量，可使用 `runtime.GOMAXPROCS(n int)` 或环境变量 `$GOMAXPROCS` 来设置，如果不手动设置，同一时刻 CPU 上也只会有 1 个 goroutine 在执行。此时是并发而非并行
+
+```go
+var c chan int
+
+func main() {
+	i := 0
+	c = make(chan int)
+	go ready("two", 2)	// 
+	go ready("one", 1)
+	fmt.Println("zero ready")
+
+	//<-c		// 从 c 中接收整数并丢弃
+	//<-c
+    
+L:
+    for {					// 若不等待，则 main() 执行结束，任何 goroutine 都将停止执行
+		select {			// select 用于选择不同类型的 channel
+		case x := <-c:		// 从 channel c 中接收整数并保存到 x
+			fmt.Println(x)
+			i++
+			if i > 1 {
+				break L
+			}
+		}
+	}
+}
+
+
+// 等待 sec 秒后输出指定内容
+func ready(str string, sec int) {
+	time.Sleep(time.Duration(sec) * time.Second)
+	fmt.Println(str, " ready")
+	c <- 1	// 将整数 1 发送到 channel c
+}
+```
+
+运行效果：
+
+ ![](http://p2j5s8fmr.bkt.clouddn.com/goroutine-run.png)
+
+
+
+#### channel
+
+根据 size 决定创建的 ch 是否有缓冲
+
+```go
+// make(chan int)
+// 无 size 或 size == 0, 此时 ch 无缓冲
+
+// make(chan int, 2)	
+// size > 0, 前 2 个元素可以无阻塞写入，第 3 个元素写入会阻塞直到其他 goroutine 从 ch 中读取值
+
+ch := make(chan type, size ...int)
+```
+
+判断 channel 状态
+
+```go
+v, ok := <- ch	// ch 未关闭时 ok 为 true，且可读取到值到 v 中；关闭后 ok 为 false
+```
+
 #### 
