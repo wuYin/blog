@@ -157,8 +157,255 @@ v, ok := name["nonexist"]	// ok == false	// 判断 map 中是否存在某个元�
 
 
 
+### 函数
+
+#### 函数定义
+
+```go
+func funcName(p int) (r, s int) {	// r, s 初始化为 0
+  	r = p * 2	// p 的值被复制，通过传值来传递参数
+    s = r - p	// r, s 是函数返回的命名参数，可在函数体内直接使用
+    return 
+}
+```
+
+函数定义顺序随意。Go 不允许函数嵌套，不过可以使用匿名函数实现。
+
+#### 作用域
+
+函数外定义的是全局变量，函数内定义的是局部变量。
+
+命名覆盖：在函数内部有局部变量与某个全局变量同名，则函数执行时局部变量会覆盖全局变量。
+
+#### 延迟调用
+
+常使用 `defer` 关闭资源句柄，保证函数调用结束前指定的函数会被执行
+
+函数内 `defer` 的延迟函数是按栈（先进后出）的顺序执行的：
+
+```go
+for i := 1; i < 4; i++ {
+	defer println(i)	// 打印 3 2 1
+}	
+```
+
+#### 变参
+
+```go
+func demo(arg ...int){
+	fmt.Printf("%T\n", arg)		// []int	// slice 类型
+    demoPart1(arg[1:])
+}
+```
+
+#### 函数作为值使用
+
+```go
+tmp := func() {
+	// 函数只是一个值，可赋值给变量
+}
+fmt.Printf("%T\n", tmp)	// func() 类型
+tmp()					// 调用函数
+
+func callback(x int, f func(int)) {
+    f(x)	// 回调函数执行   
+}    
+```
+
+#### Panic 与 Recover
+
+Go 使用 panic-and-recover 和 defer 代替了异常处理机制，不过在代码中应该尽量少使用 panic 和 recover :
+
+```go
+func main() {
+	tmp := func() {
+        panic(100)		// 手动调用 panic 中断执行，但 main() 内的 defer 依旧会执行
+   		println("not exec")		// 已被中断，不执行
+	}
+	println(throwsPanic(tmp))	// true
+}
+
+func throwsPanic(f func()) (b bool) {
+	defer func() {
+        // recover() 仅在 defer 中生效。若执行过程正常则返回 nil，否则返回 panic() 的参数值
+        if x := recover(); x != nil {
+			b = true
+            log.Print(x)	// 值为 panic() 的参数 100
+		}
+	}()
+	f()
+	return
+}
+```
 
 
+
+### 包
+
+与 PHP 的 namespace 类似，package 是 func、struct 和 变量等数据的集合，用于避免命名冲突和组织代码。
+
+包中大写字母开头的数据是公有可导出的：在其他包中可直接引用，小写字母开头的数据是私有不能被外部引用的
+
+#### 标识符与文档
+
+命名应有意义，习惯上包名为全小写且与文件夹同名的一个单词，函数使用驼峰式命名。
+
+包的注释写在任一文件的头部，用于介绍包提供的功能和完整情况。导出的函数应有文字描述函数的功能，如：
+
+```go
+/*
+The regexp package implements a simple library forregular expressions.
+...	
+*/
+package regexp
+
+// Printf formats according to a format specifier and writes to standard output.
+// It returns the number of bytes written and any write error encountered.
+func Printf(format string, a ...interface) (n int, err error)
+```
+
+#### 测试包
+
+测试文件命名为 `*_test.go` 且测试函数以 `Test` 开头，注意测试包一般与被测试的包有相同的包名，以便测试私有函数。注意几个用来表明测试失败的函数：
+
+```go
+func (t *testing.T) Fail()	// 标记测试失败，但继续执行其他测试
+func (t *testing.T) FailNow()	// 标记测试失败，立刻结束当前文件的测试，测试下一文件
+func (t *testing.T) Log(args ...interface{})	// 格式化参数并记录
+func (t *testing.T) Fatal(args ...interface{})	// Log() & FailNow()
+```
+
+#### 常用包（库）
+
+- fmt ：实现格式化的 IO 函数，多用于格式化输出
+
+- io：封装 os 包原始的 IO 操作
+
+- os：提供与平台无关的操作系统功能接口，是根据 Unix 形式设计的
+
+- os/exec：执行外部命令
+
+- sync：提供同步原语如 mutex
+
+- bufio：实现缓冲 IO
+
+- sort：实现对数组、用户自定义集合的排序功能
+
+- strconv：提供字符串与基本数据类型之间的转换
+
+- flag：命令行参数解析
+
+- encoding/json：解析和编码 JSON 对象和字串
+
+- html/template：数据填充的视图模板，用于如 HTML 的文本输出
+
+- net/http：实现发起和响应 HTTP 请求，解析 URL及可扩展的 HTTP 服务
+
+- unsafe：包含 Go 在数据类型上不安全的操作，一般不使用
+
+- reflect：实现运行时反射，常使用 Typeof 来解析值的动态类型信息
+
+  ​
+
+
+
+### 进阶
+
+#### 指针
+
+Go 中的指针不像 C 一样支持指针运算（加减整数），如：
+
+```go
+var p *int
+var x = 1
+p = &x
+*p++	// Go: 获取 p 指向的值并加 1	// C: p + sizeof(int)
+fmt.Printf("%v\n", x)	// x == 2
+```
+
+#### 内存分配
+
+- `func new(Type) *Type`：返回 `*Type` 并指向一个 `Type` 零值
+- `func make(t Type, size ...IntegerType) Type`：返回初始化后的 `Type` 值， 只能用于创建 slice、map 和 channel
+
+#### 自定义类型
+
+若 struct 要实现某个接口，则实现的 func 必须是指定的方法。否则一般不区分函数和方法，实现功能即可。另外注意：
+
+```go
+type Person struct {
+	Name string
+	Age  int
+}
+
+// 方法
+// 若 Person 要实现某个带 Intro 方法的接口，则必须使用方法实现 Intro()
+func (p *Person) Intro() {
+	fmt.Printf("Name: %s, Age: %d\n", p.Name, p.Age)
+}
+
+// 函数
+func Intro2(p *Person) {
+	fmt.Printf("Name: %s, Age: %d\n", p.Name, p.Age)
+}
+
+func main() {
+    me := new(Person)
+    me.Name = "wuYin"
+    me.Age  =  20
+    fmt.Printf("%v\n", me)	// &{wuYin 20}	// *Person 类型    
+   	me.Intro()				// me.Intro() 是 (*me).Intro1() 的简写
+	Intro2(me)
+}
+```
+
+#### 类型转换
+
+转换函数：
+
+![](http://p2j5s8fmr.bkt.clouddn.com/convert.png)
+
+注意：
+
+- string 与 byte slice、 rune slice
+
+  ```go
+  name := "Aa吴"
+
+  // 每个 byte 保存字符串对应字节的整数值，utf8 编码一个字符可能有 2~4 个字节
+  fmt.Printf("%v", []byte(name))	// [65 97 229 144 180]
+
+  // 每个 rune 保存指向该 Unicode 字符的指针，一个字符一个整数编号
+  fmt.Printf("%v", []rune(name))	// [65 97 21556]
+
+  // 直接转换
+  fmt.Printf("%v\n", string([]rune{'m', 'e'}))
+  fmt.Printf("%v\n", string([]byte{'m', 'e'}))
+  fmt.Printf("%v\n", string([]rune{257, 1024, 65}))
+  ```
+
+- float32、float64 转 int 均会截断小数部分
+
+  ```go
+  f := 100.1
+  fmt.Printf("%v\n", int(f))	// 100
+  ```
+
+- 自定义类型的转换
+
+  ```go
+  type Score struct{ int }
+  type Grade Score
+
+  func main() {
+  	var s = Score{100}
+      var g Grade = s		// cannot use s (type Score) as type Grade in assignment
+      
+      var g = Grade(s)	// 显式类型转换，两个结构体字段信息需一致
+  }    
+  ```
+
+  ​
 
 
 
