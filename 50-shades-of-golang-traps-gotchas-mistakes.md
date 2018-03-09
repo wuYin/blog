@@ -1188,5 +1188,310 @@ func main() {
 
 
 
+### 中级 35-50
+
+---
+
+#### 35. 关闭 HTTP 的响应体
+
+使用 HTTP 标准库发起请求、获取响应时，即使你不从响应中读取任何数据或响应为空，都需要手动关闭响应体。新手很容易忘记手动关闭，或者写在了错误的位置：
+
+```go
+// 请求失败造成 panic
+func main() {
+	resp, err := http.Get("https://api.ipify.org?format=json")
+	defer resp.Body.Close()	// resp 可能为 nil，不能读取 Body
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+    checkError(err)
+
+	fmt.Println(string(body))
+}
+
+func checkError(err error) {
+	if err != nil{
+		log.Fatalln(err)
+	}
+}
+```
+
+上边的代码能正确发起请求，但是一旦请求失败，变量 `resp` 值为 `nil`，造成 panic：
+
+> panic: runtime error: invalid memory address or nil pointer dereference
+
+应该先检查 HTTP 响应错误为 `nil`，再调用 `resp.Body.Close()` 来关闭响应体：
+
+```go
+// 大多数情况正确的示例
+func main() {
+	resp, err := http.Get("https://api.ipify.org?format=json")
+	checkError(err)
+    
+	defer resp.Body.Close()	// 绝大多数情况下的正确关闭方式
+	body, err := ioutil.ReadAll(resp.Body)
+	checkError(err)
+
+	fmt.Println(string(body))
+}
+```
+
+输出：
+
+> Get https://api.ipify.org?format=json: x509: certificate signed by unknown authority
+
+
+
+绝大多数请求失败的情况下，`resp` 的值为 `nil` 且 `err` 不为 `nil`。但如果你得到的是重定向错误，那它俩的值都将不为 `nil`，最后依旧可能发生内存泄露。2 个解决办法：
+
+- 可以直接在处理 HTTP 响应错误的代码块中，直接关闭非 nil 的响应体
+- 手动调用 `defer` 来关闭响应体
+
+```go
+// 正确示例
+func main() {
+	resp, err := http.Get("http://www.baidu.com")
+	
+    // 关闭 resp.Body 的正确姿势
+    if resp != nil {
+		defer resp.Body.Close()
+	}
+
+	checkError(err)
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	checkError(err)
+
+	fmt.Println(string(body))
+}
+```
+
+`resp.Body.Close()` 早先版本的实现是读取响应体的数据之后丢弃，保证了 keep-alive 的 HTTP 连接能重用处理不止一个请求。但 Go 的最新版本将读取并丢弃数据的任务交给了用户，如果你不处理，HTTP 连接可能会直接关闭而非重用，参考在 Go 1.5 版本文档。
+
+如果程序大量重用 HTTP 长连接，你可能要在处理响应的逻辑代码中加入：
+
+```go
+_, err = io.Copy(ioutil.Discard, resp.Body)	// 手动丢弃读取完毕的数据
+```
+
+如果你需要完整读取响应，上边的代码是需要写的。比如在解码 API 的 JSON 响应数据：
+
+```go
+json.NewDecoder(resp.Body).Decode(&data)  
+```
+
+
+
+#### 36. 关闭 HTTP 连接
+
+一些支持 HTTP1.1 或 HTTP1.0 配置了 `connection: keep-alive` 选项的服务器会保持一段时间的长连接。但标准库 "net/http" 的连接默认只在服务器主动要求关闭时才断开，所以你的程序可能会消耗完 socket 描述符。解决办法有 2 个，请求结束后：
+
+- 直接设置请求变量的 `Close ` 字段值为 `true`，每次请求结束后就会主动关闭连接。
+- 设置 Header 请求头部选项 `Connection: close`，然后服务器返回的响应头部也会有这个选项，此时 HTTP 标准库会主动断开连接。
+
+```go
+// 主动关闭连接
+func main() {
+	req, err := http.NewRequest("GET", "http://golang.org", nil)
+	checkError(err)
+
+	req.Close = true
+	//req.Header.Add("Connection", "close")	// 等效的关闭方式
+
+	resp, err := http.DefaultClient.Do(req)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	checkError(err)
+
+	body, err := ioutil.ReadAll(resp.Body)
+	checkError(err)
+
+	fmt.Println(string(body))
+}
+```
+
+你可以创建一个自定义配置的 HTTP transport 客户端，用来取消 HTTP 全局的复用连接：
+
+```go
+func main() {
+	tr := http.Transport{DisableKeepAlives: true}
+	client := http.Client{Transport: &tr}
+
+	resp, err := client.Get("https://golang.google.cn/")
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	checkError(err)
+
+	fmt.Println(resp.StatusCode)	// 200
+
+	body, err := ioutil.ReadAll(resp.Body)
+	checkError(err)
+
+	fmt.Println(len(string(body)))
+}
+```
+
+根据需求选择使用场景：
+
+- 若你的程序要向同一服务器发大量请求，使用默认的保持长连接。
+
+
+- 若你的程序要连接大量的服务器，且每台服务器只请求一两次，那收到请求后直接关闭连接。或增加最大文件打开数 `fs.file-max` 的值。 
+
+
+
+
+#### 37. 将 JSON 中的数字解码为 interface 类型
+
+在 encode/decode JSON 数据时，Go 默认会将数值当做 float64 处理，比如下边的代码会造成 panic：
+
+```go
+func main() {
+	var data = []byte(`{"status": 200}`)
+	var result map[string]interface{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		log.Fatalln(err)
+	}
+
+	fmt.Printf("%T\n", result["status"])	// float64
+	var status = result["status"].(int)		// 类型断言错误
+	fmt.Println("Status value: ", status)
+}
+```
+
+> panic: interface conversion: interface {} is float64, not int
+
+如果你尝试 decode 的 JSON 字段是整型，你有 5 种办法：
+
+- 将 int 值转为 float 统一使用
+
+- 将 decode 后需要的 float 值转为 int 使用
+
+  ```go
+  // 将 decode 的值转为 int 使用
+  func main() {
+  	var data = []byte(`{"status": 200}`)
+  	var result map[string]interface{}
+  	
+      if err := json.Unmarshal(data, &result); err != nil {
+  		log.Fatalln(err)
+  	}
+      
+  	var status = uint64(result["status"].(float64))
+  	fmt.Println("Status value: ", status)
+  }
+  ```
+
+- 使用 `Decoder` 类型来 decode JSON 数据，明确表示字段的值类型
+
+  ```go
+  // 指定字段类型
+  func main() {
+  	var data = []byte(`{"status": 200}`)
+  	var result map[string]interface{}
+      
+  	var decoder = json.NewDecoder(bytes.NewReader(data))
+  	decoder.UseNumber()
+
+  	if err := decoder.Decode(&result); err != nil {
+  		log.Fatalln(err)
+  	}
+
+  	var status, _ = result["status"].(json.Number).Int64()
+  	fmt.Println("Status value: ", status)
+  }
+
+  // 你可以使用 string 来存储数值数据，在 decode 时再决定按 int 还是 float 使用
+  // 将数据转为 decode 为 string
+  func main() {
+  	var data = []byte({"status": 200})
+    	var result map[string]interface{}
+    	var decoder = json.NewDecoder(bytes.NewReader(data))
+    	decoder.UseNumber()
+
+    	if err := decoder.Decode(&result); err != nil {
+    		log.Fatalln(err)
+    	}
+
+    	var status uint64
+    	err := json.Unmarshal([]byte(result["status"].(json.Number).String()), &status);
+    	checkError(err)
+
+    	fmt.Println("Status value: ", status)
+  }
+  ```
+
+
+
+
+- 使用 `struct` 类型将你需要的数据映射为数值型
+
+  ```
+​```go
+  // struct 中指定字段类型
+  func main() {
+  	var data = []byte(`{"status": 200}`)
+  	var result struct {
+  		Status uint64 `json:"status"`
+  	}
+
+  	err := json.NewDecoder(bytes.NewReader(data)).Decode(&result)
+  	checkError(err)
+
+  	fmt.Printf("Result: %+v", result)
+  }
+  ```
+
+
+
+- 可以使用 `struct` 将数值类型映射为 `json.RawMessage` 原生数据类型
+
+  适用于如果 JSON 数据不着急 decode 或 JSON 某个字段的值类型不固定等情况：
+
+  ```go
+  // 状态名称可能是 int 也可能是 string，指定为 json.RawMessage 类型
+  func main() {
+  	records := [][]byte{
+  		[]byte(`{"status":200, "tag":"one"}`),
+  		[]byte(`{"status":"ok", "tag":"two"}`),
+  	}
+
+  	for idx, record := range records {
+  		var result struct {
+  			StatusCode uint64
+  			StatusName string
+  			Status     json.RawMessage `json:"status"`
+  			Tag        string          `json:"tag"`
+  		}
+
+  		err := json.NewDecoder(bytes.NewReader(record)).Decode(&result)
+  		checkError(err)
+
+  		var name string
+  		err = json.Unmarshal(result.Status, &name)
+  		if err == nil {
+  			result.StatusName = name
+  		}
+
+  		var code uint64
+  		err = json.Unmarshal(result.Status, &code)
+  		if err == nil {
+  			result.StatusCode = code
+  		}
+
+  		fmt.Printf("[%v] result => %+v\n", idx, result)
+  	}
+  }
+  ```
+
+  ​
+
 
 
