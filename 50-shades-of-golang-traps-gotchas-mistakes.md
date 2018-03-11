@@ -1368,7 +1368,7 @@ func main() {
 
 > panic: interface conversion: interface {} is float64, not int
 
-如果你尝试 decode 的 JSON 字段是整型，你有 5 种办法：
+如果你尝试 decode 的 JSON 字段是整型，你可以：
 
 - 将 int 值转为 float 统一使用
 
@@ -1408,47 +1408,43 @@ func main() {
   	fmt.Println("Status value: ", status)
   }
 
-  // 你可以使用 string 来存储数值数据，在 decode 时再决定按 int 还是 float 使用
-  // 将数据转为 decode 为 string
-  func main() {
-  	var data = []byte({"status": 200})
+   // 你可以使用 string 来存储数值数据，在 decode 时再决定按 int 还是 float 使用
+   // 将数据转为 decode 为 string
+   func main() {
+   	var data = []byte({"status": 200})
     	var result map[string]interface{}
     	var decoder = json.NewDecoder(bytes.NewReader(data))
     	decoder.UseNumber()
-
     	if err := decoder.Decode(&result); err != nil {
     		log.Fatalln(err)
     	}
-
-    	var status uint64
+      var status uint64
     	err := json.Unmarshal([]byte(result["status"].(json.Number).String()), &status);
-    	checkError(err)
-
-    	fmt.Println("Status value: ", status)
+  	checkError(err)
+     	fmt.Println("Status value: ", status)
   }
   ```
 
-
-
+  ​
 
 - 使用 `struct` 类型将你需要的数据映射为数值型
 
-  ```
-​```go
+
+  ```go
   // struct 中指定字段类型
   func main() {
-  	var data = []byte(`{"status": 200}`)
-  	var result struct {
-  		Status uint64 `json:"status"`
-  	}
+    	var data = []byte(`{"status": 200}`)
+    	var result struct {
+    		Status uint64 `json:"status"`
+    	}
 
-  	err := json.NewDecoder(bytes.NewReader(data)).Decode(&result)
-  	checkError(err)
-
+    	err := json.NewDecoder(bytes.NewReader(data)).Decode(&result)
+    	checkError(err)
   	fmt.Printf("Result: %+v", result)
   }
   ```
 
+  ​
 
 
 - 可以使用 `struct` 将数值类型映射为 `json.RawMessage` 原生数据类型
@@ -1492,6 +1488,282 @@ func main() {
   ```
 
   ​
+
+#### 38. struct、array、slice 和 map 的值比较
+
+可以使用相等运算符 `==` 来比较结构体变量，前提是两个结构体的成员都是可比较的类型。 
+
+```go
+type data struct {
+	num     int
+	fp      float32
+	complex complex64
+	str     string
+	char    rune
+	yes     bool
+	events  <-chan string
+	handler interface{}
+	ref     *byte
+	raw     [10]byte
+}
+
+func main() {
+	v1 := data{}
+	v2 := data{}
+	fmt.Println("v1 == v2: ", v1 == v2)	// true
+}
+```
+
+
+
+
+如果两个结构体中有任意成员是不可比较的，将会造成编译错误。注意数组成员只有在数组元素可比较时候才可比较。
+
+```go
+type data struct {
+	num    int
+	checks [10]func() bool	// 无法比较
+	doIt   func() bool		// 无法比较
+	m      map[string]string// 无法比较
+	bytes  []byte			// 无法比较
+}
+
+func main() {
+	v1 := data{}
+	v2 := data{}
+
+	fmt.Println("v1 == v2: ", v1 == v2)
+}
+```
+
+>  invalid operation: v1 == v2 (struct containing [10]func() bool cannot be compared)
+
+
+
+Go 提供了一些库函数来比较那些无法使用 `==` 比较的变量，比如使用 "reflect" 包的 `DeepEqual()` ：
+
+```go
+// 比较相等运算符无法比较的元素
+func main() {
+	v1 := data{}
+	v2 := data{}
+	fmt.Println("v1 == v2: ", reflect.DeepEqual(v1, v2))	// true
+
+	m1 := map[string]string{"one": "a", "two": "b"}
+	m2 := map[string]string{"two": "b", "one": "a"}
+	fmt.Println("v1 == v2: ", reflect.DeepEqual(m1, m2))	// true
+
+	s1 := []int{1, 2, 3}
+	s2 := []int{1, 2, 3}
+   	// 注意两个 slice 相等，值和顺序必须一致
+	fmt.Println("v1 == v2: ", reflect.DeepEqual(s1, s2))	// true
+}
+```
+
+这种比较方式可能比较慢，根据你的程序需求来使用。`DeepEqual()` 还有其他用法：
+
+```go
+func main() {
+	var b1 []byte = nil
+	b2 := []byte{}
+	fmt.Println("b1 == b2: ", reflect.DeepEqual(b1, b2))	// false
+}
+```
+
+**注意：**
+
+- `DeepEqual()` 并不总适合于比较 slice
+
+```go
+func main() {
+	var str = "one"
+	var in interface{} = "one"
+	fmt.Println("str == in: ", reflect.DeepEqual(str, in))	// true
+
+	v1 := []string{"one", "two"}
+	v2 := []string{"two", "one"}
+	fmt.Println("v1 == v2: ", reflect.DeepEqual(v1, v2))	// false
+
+	data := map[string]interface{}{
+		"code":  200,
+		"value": []string{"one", "two"},
+	}
+	encoded, _ := json.Marshal(data)
+	var decoded map[string]interface{}
+	json.Unmarshal(encoded, &decoded)
+	fmt.Println("data == decoded: ", reflect.DeepEqual(data, decoded))	// false
+}
+```
+
+如果要大小写不敏感来比较 byte 或 string 中的英文文本，可以使用 "bytes" 或 "strings" 包的 `ToUpper()` 和 `ToLower()` 函数。比较其他语言的 byte 或 string，应使用 `bytes.EqualFold()`  和 `strings.EqualFold()` 
+
+如果 byte slice 中含有验证用户身份的数据（密文哈希、token 等），不应再使用 `reflect.DeepEqual()`、`bytes.Equal()`、 `bytes.Compare()`。这三个函数容易对程序造成 [timing attacks](http://en.wikipedia.org/wiki/Timing_attack)，此时应使用 "crypto/subtle" 包中的 `subtle.ConstantTimeCompare()` 等函数
+
+- `reflect.DeepEqual()` 认为空 slice 与 nil slice 并不相等，但注意 `byte.Equal()` 会认为二者相等：
+
+```go
+func main() {
+	var b1 []byte = nil
+	b2 := []byte{}
+
+    // b1 与 b2 长度相等、有相同的字节序
+    // nil 与 slice 在字节上是相同的
+    fmt.Println("b1 == b2: ", bytes.Equal(b1, b2))	// true
+}
+```
+
+
+
+
+
+#### 39. 从 panic 中恢复
+
+在一个 defer 延迟执行的函数中调用 `recover()` ，它便能捕捉 / 中断 panic
+
+```go
+// 错误的 recover 调用示例
+func main() {
+	recover()	// 什么都不会捕捉
+	panic("not good")	// 发生 panic，主程序退出
+	recover()	// 不会被执行
+	println("ok")
+}
+
+// 正确的 recover 调用示例
+func main() {
+	defer func() {
+		fmt.Println("recovered: ", recover())
+	}()
+	panic("not good")
+}
+```
+
+从上边可以看出，`recover()` 仅在 defer 执行的函数中调用才会生效。
+
+```go
+// 错误的调用示例
+func main() {
+	defer func() {
+		doRecover()
+	}()
+	panic("not good")
+}
+
+func doRecover() {
+	fmt.Println("recobered: ", recover())
+}
+```
+
+> recobered:  <nil>   panic: not good
+
+
+
+#### 40. 在 range 迭代 slice、array、map 时通过更新引用来更新元素
+
+在 range 迭代中，得到的值其实是元素的一份值拷贝，更新拷贝并不会更改原来的元素，即是拷贝的地址并不是原有元素的地址：
+
+```go
+func main() {
+	data := []int{1, 2, 3}
+	for _, v := range data {
+		v *= 10		// data 中原有元素是不会被修改的
+	}
+	fmt.Println("data: ", data)	// data:  [1 2 3]
+}
+```
+
+如果要修改原有元素的值，应该使用索引直接访问：
+
+```go
+func main() {
+	data := []int{1, 2, 3}
+	for i, v := range data {
+		data[i] = v * 10	
+	}
+	fmt.Println("data: ", data)	// data:  [10 20 30]
+}
+```
+
+如果你的集合保存的是指向值的指针，需稍作修改。依旧需要使用索引访问元素，不过可以使用 range 出来的元素直接更新原有值：
+
+```go
+func main() {
+	data := []*struct{ num int }{{1}, {2}, {3},}
+	for _, v := range data {
+		v.num *= 10	// 直接使用指针更新
+	}
+	fmt.Println(data[0], data[1], data[2])	// &{10} &{20} &{30}
+}
+```
+
+
+
+
+
+#### 41. slice 中隐藏的数据
+
+从 slice 中重新切出新 slice 时，新 slice 会引用原 slice 的底层数组。如果跳了这个坑，程序可能会分配大量的临时 slice 来指向原底层数组的部分数据，将导致难以预料的内存使用。
+
+```go
+func get() []byte {
+	raw := make([]byte, 10000)
+	fmt.Println(len(raw), cap(raw), &raw[0])	// 10000 10000 0xc420080000
+	return raw[:3]	// 重新分配容量为 10000 的 slice
+}
+
+func main() {
+	data := get()
+	fmt.Println(len(data), cap(data), &data[0])	// 3 10000 0xc420080000
+}
+```
+
+可以通过拷贝临时 slice 的数据，而不是重新切片来解决：
+
+```go
+func get() (res []byte) {
+	raw := make([]byte, 10000)
+	fmt.Println(len(raw), cap(raw), &raw[0])	// 10000 10000 0xc420080000
+	res = make([]byte, 3)
+	copy(res, raw[:3])
+	return
+}
+
+func main() {
+	data := get()
+	fmt.Println(len(data), cap(data), &data[0])	// 3 3 0xc4200160b8
+}
+```
+
+
+
+
+
+#### 42. Slice 中数据的误用
+
+举个简单例子，重写文件路径（存储在 slice 中）
+
+分割路径来指向每个不同级的目录，修改第一个目录名再重组子目录名，创建新路径：
+
+```go
+func main() {
+
+	path := []byte("AAA/BBB")
+	sepIndex := bytes.IndexByte(path, '/') // 3
+
+	dir1 := path[:sepIndex]
+	dir2 := path[sepIndex+1:]
+	println("dir1: ", string(dir1))	// AAA
+	println("dir2: ", string(dir2))	// BBB
+
+	dir1 = append(dir1, "suffix"...)
+	path = bytes.Join([][]byte{dir1, dir2}, []byte{'/'})
+	println("dir1: ", string(dir1))	// AAAsuffix
+	println("dir2: ", string(dir2))	// BBB 
+
+	println("new path: ", string(path))	// AAAsuffix/BBB
+}
+```
+
 
 
 
