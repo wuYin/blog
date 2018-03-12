@@ -1736,8 +1736,6 @@ func main() {
 
 
 
-
-
 #### 42. Slice 中数据的误用
 
 举个简单例子，重写文件路径（存储在 slice 中）
@@ -1745,24 +1743,494 @@ func main() {
 分割路径来指向每个不同级的目录，修改第一个目录名再重组子目录名，创建新路径：
 
 ```go
+// 错误使用 slice 的拼接示例
 func main() {
-
-	path := []byte("AAA/BBB")
-	sepIndex := bytes.IndexByte(path, '/') // 3
+	path := []byte("AAAA/BBBBBBBBB")
+	sepIndex := bytes.IndexByte(path, '/') // 4
+	println(sepIndex)
 
 	dir1 := path[:sepIndex]
 	dir2 := path[sepIndex+1:]
-	println("dir1: ", string(dir1))	// AAA
-	println("dir2: ", string(dir2))	// BBB
+	println("dir1: ", string(dir1))	// AAAA
+	println("dir2: ", string(dir2))	// BBBBBBBBB
 
 	dir1 = append(dir1, "suffix"...)
+   	println("current path: ", string(path))	// AAAAsuffixBBBB
+    
 	path = bytes.Join([][]byte{dir1, dir2}, []byte{'/'})
-	println("dir1: ", string(dir1))	// AAAsuffix
-	println("dir2: ", string(dir2))	// BBB 
+	println("dir1: ", string(dir1))	// AAAAsuffix
+	println("dir2: ", string(dir2))	// uffixBBBB
 
-	println("new path: ", string(path))	// AAAsuffix/BBB
+	println("new path: ", string(path))	// AAAAsuffix/uffixBBBB	// 错误结果
 }
 ```
+
+拼接的结果不是正确的 `AAAAsuffix/BBBBBBBBB`，因为 dir1、 dir2 两个 slice 引用的数据都是 `path` 的底层数组，第 13 行修改 `dir1` 同时也修改了 `path`，也导致了 `dir2` 的修改 
+
+解决：
+
+- 重新分配新的 slice 并拷贝你需要的数据
+- 使用完整的 slice 表达式：`input[low:high:max]`，容量便调整为 max - low
+
+```go
+// 使用 full slice expression
+func main() {
+
+	path := []byte("AAAA/BBBBBBBBB")
+	sepIndex := bytes.IndexByte(path, '/') // 4
+    dir1 := path[:sepIndex:sepIndex]	// 此时 cap(dir1) 指定为4， 而不是先前的 16
+	dir2 := path[sepIndex+1:]
+	dir1 = append(dir1, "suffix"...)
+
+	path = bytes.Join([][]byte{dir1, dir2}, []byte{'/'})
+	println("dir1: ", string(dir1))	// AAAAsuffix
+	println("dir2: ", string(dir2))	// BBBBBBBBB
+	println("new path: ", string(path))	// AAAAsuffix/BBBBBBBBB
+}
+```
+
+第 6 行中第三个参数是用来控制 dir1 的新容量，再往 dir1 中 append 超额元素时，将分配新的 buffer 来保存。而不是覆盖原来的 path 底层数组
+
+
+
+#### 43. 旧 slice
+
+当你从一个已存在的 slice 创建新 slice 时，二者的数据指向相同的底层数组。如果你的程序使用这个特性，那需要注意 "旧"（stale） slice 问题。
+
+某些情况下，向一个 slice 中追加元素而它指向的底层数组容量不足时，将会重新分配一个新数组来存储数据。而其他 slice 还指向原来的旧底层数组。
+
+```go
+// 超过容量将重新分配数组来拷贝值、重新存储
+func main() {
+	s1 := []int{1, 2, 3}
+	fmt.Println(len(s1), cap(s1), s1)	// 3 3 [1 2 3 ]
+
+	s2 := s1[1:]
+	fmt.Println(len(s2), cap(s2), s2)	// 2 2 [2 3]
+
+	for i := range s2 {
+		s2[i] += 20
+	}
+    // 此时的 s1 与 s2 是指向同一个底层数组的
+	fmt.Println(s1)	// [1 22 23]
+	fmt.Println(s2)	// [22 23]
+
+	s2 = append(s2, 4)	// 向容量为 2 的 s2 中再追加元素，此时将分配新数组来存
+
+	for i := range s2 {
+		s2[i] += 10
+	}
+	fmt.Println(s1)	// [1 22 23]	// 此时的 s1 不再更新，为旧数据
+	fmt.Println(s2)	// [32 33 14]
+}
+```
+
+
+
+#### 44. 类型声明与方法
+
+从一个现有的非 interface 类型创建新类型时，并不会继承原有的方法：
+
+```go
+// 定义 Mutex 的自定义类型
+type myMutex sync.Mutex
+
+func main() {
+	var mtx myMutex
+	mtx.Lock()
+	mtx.UnLock()
+}
+```
+
+> mtx.Lock undefined (type myMutex has no field or method Lock)...
+
+如果你需要使用原类型的方法，可将原类型以匿名字段的形式嵌到你定义的新 struct 中：
+
+```go
+// 类型以字段形式直接嵌入
+type myLocker struct {
+	sync.Mutex
+}
+
+func main() {
+	var locker myLocker
+	locker.Lock()
+	locker.Unlock()
+}
+```
+
+interface 类型声明也保留它的方法集：
+
+```go
+type myLocker sync.Locker
+
+func main() {
+	var locker myLocker
+	locker.Lock()
+	locker.Unlock()
+}
+```
+
+
+
+
+
+#### 45. 跳出 for-switch 和 for-select 代码块
+
+没有指定标签的 break 只会跳出 switch/select 语句，若不能使用 return 语句跳出的话，可为 break 跳出标签指定的代码块：
+
+```go
+// break 配合 label 跳出指定代码块
+func main() {
+loop:
+	for {
+		switch {
+		case true:
+			fmt.Println("breaking out...")
+			//break	// 死循环，一直打印 breaking out...
+			break loop
+		}
+	}
+	fmt.Println("out...")
+}
+```
+
+`goto` 虽然也能跳转到指定位置，但依旧会再次进入 for-switch，死循环。
+
+
+
+
+
+#### 46. for 语句中的迭代变量与闭包函数
+
+for 语句中的迭代变量在每次迭代中都会重用，即 for 中创建的闭包函数接收到的参数始终是同一个变量，在 goroutine 开始执行时都会得到同一个迭代值：
+
+```go
+func main() {
+	data := []string{"one", "two", "three"}
+
+	for _, v := range data {
+		go func() {
+			fmt.Println(v)
+		}()
+	}
+
+	time.Sleep(3 * time.Second)
+    // 输出 three three three
+}
+```
+
+最简单的解决方法：无需修改 goroutine 函数，在 for 内部使用局部变量保存迭代值，再传参：
+
+```go
+func main() {
+	data := []string{"one", "two", "three"}
+
+	for _, v := range data {
+		vCopy := v
+		go func() {
+			fmt.Println(vCopy)
+		}()
+	}
+
+	time.Sleep(3 * time.Second)
+    // 输出 one two three
+}
+```
+
+另一个解决方法：直接将当前的迭代值以参数形式传递给匿名函数：
+
+```go
+func main() {
+	data := []string{"one", "two", "three"}
+
+	for _, v := range data {
+		go func(in string) {
+			fmt.Println(in)
+		}(v)
+	}
+
+	time.Sleep(3 * time.Second)
+    // 输出 one two three
+}
+```
+
+注意下边这个稍复杂的 3 个示例区别：
+
+```go
+type field struct {
+	name string
+}
+
+func (p *field) print() {
+	fmt.Println(p.name)
+}
+
+// 错误示例
+func main() {
+	data := []field{{"one"}, {"two"}, {"three"}}
+	for _, v := range data {
+		go v.print()
+	}
+	time.Sleep(3 * time.Second)
+    // 输出 three three three 
+}
+
+
+// 正确示例
+func main() {
+	data := []field{{"one"}, {"two"}, {"three"}}
+	for _, v := range data {
+		v := v
+		go v.print()
+	}
+	time.Sleep(3 * time.Second)
+    // 输出 one two three
+}
+
+// 正确示例
+func main() {
+	data := []*field{{"one"}, {"two"}, {"three"}}
+	for _, v := range data {	// 此时迭代值 v 是三个元素值的地址，每次 v 指向的值不同
+		go v.print()
+	}
+	time.Sleep(3 * time.Second)
+    // 输出 one two three
+}
+```
+
+
+
+
+
+#### 47. defer 函数的参数值
+
+对 defer 延迟执行的函数，它的参数会在声明时候就会求出具体值，而不是在执行时才求值：
+
+```go
+// 在 defer 函数中参数会提前求值
+func main() {
+	var i = 1
+	defer fmt.Println("result: ", func() int { return i * 2 }())
+	i++
+}
+```
+
+> result:  2
+
+
+
+
+
+#### 48. defer 函数的执行时机
+
+对 defer 延迟执行的函数，会在调用它的函数结束时执行，而不是在调用它的语句块结束时执行，注意区分开。
+
+比如在一个长时间执行的函数里，内部 for 循环中使用 defer 来清理每次迭代产生的资源调用，就会出现问题：
+
+```go
+// 命令行参数指定目录名
+// 遍历读取目录下的文件
+func main() {
+
+	if len(os.Args) != 2 {
+		os.Exit(1)
+	}
+
+	dir := os.Args[1]
+	start, err := os.Stat(dir)
+	if err != nil || !start.IsDir() {
+		os.Exit(2)
+	}
+
+	var targets []string
+	filepath.Walk(dir, func(fPath string, fInfo os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !fInfo.Mode().IsRegular() {
+			return nil
+		}
+
+		targets = append(targets, fPath)
+		return nil
+	})
+
+	for _, target := range targets {
+		f, err := os.Open(target)
+		if err != nil {
+            fmt.Println("bad target:", target, "error:", err)//error:too many open files
+			break
+		}
+		defer f.Close()	// 在每次 for 语句块结束时，不会关闭文件资源
+        // 使用 f 资源
+	}
+}
+```
+
+先创建 10000 个文件：
+
+```shell
+#!/bin/bash
+for n in {1..10000}; do
+	echo content > "file${n}.txt"
+done
+```
+
+运行效果：
+
+ ![](http://p2j5s8fmr.bkt.clouddn.com/file-open-errors.png)
+
+
+
+解决办法：defer 延迟执行的函数写入匿名函数中：
+
+```go
+// 目录遍历正常
+func main() {
+    // ...
+    
+	for _, target := range targets {
+		func() {
+			f, err := os.Open(target)
+			if err != nil {
+				fmt.Println("bad target:", target, "error:", err)
+				return	// 在匿名函数内使用 return 代替 break 即可
+			}
+			defer f.Close()	// 匿名函数执行结束，调用关闭文件资源
+            // 使用 f 资源
+		}()
+	}
+}
+```
+
+当然你也可以去掉 defer，在文件资源使用完毕后，直接调用 `f.Close()` 来关闭。
+
+
+
+
+
+#### 49. 失败的类型断言
+
+在类型断言语句中，断言失败则会返回目标类型的“零值”，断言变量与原来变量混用可能出现异常情况：
+
+```go
+// 错误示例
+func main() {
+	var data interface{} = "great"
+
+    // data 混用
+	if data, ok := data.(int); ok {
+		fmt.Println("[is an int], data: ", data)
+	} else {
+		fmt.Println("[not an int], data: ", data)	// [isn't a int], data:  0
+	}
+}
+
+
+// 正确示例
+func main() {
+	var data interface{} = "great"
+
+	if res, ok := data.(int); ok {
+		fmt.Println("[is an int], data: ", res)
+	} else {
+		fmt.Println("[not an int], data: ", data)	// [not an int], data:  great
+	}
+}
+```
+
+
+
+
+
+#### 50. 阻塞的 gorutinue 与资源泄露
+
+在 2012 年 Google I/O 大会上，Rob Pike 的 [Go Concurrency Patterns](https://talks.golang.org/2012/concurrency.slide#1) 演讲讨论 Go 的几种基本并发模式，如 [完整代码](https://repl.it/@pllv/Google-Search-Gorountine-Parallel-Replicas-Rob-Pike) 中从数据集中获取第一条数据的函数：
+
+```go
+func First(query string, replicas []Search) Result {
+	c := make(chan Result)
+	replicaSearch := func(i int) { c <- replicas[i](query) }
+	for i := range replicas {
+		go replicaSearch(i)
+	}
+	return <-c
+}
+```
+
+在搜索重复时依旧每次都起一个 goroutine 去处理，每个 goroutine 都把它的搜索结果发送到结果 channel 中，channel 中收到的第一条数据会直接返回。
+
+返回完第一条数据后，其他 goroutine 的搜索结果怎么处理？他们自己的协程如何处理？
+
+在 `First()` 中的结果 channel 是无缓冲的，这意味着只有第一个 goroutine 能返回，由于没有 receiver，其他的 goroutine 会在发送上一直阻塞。如果你大量调用，则可能造成资源泄露。
+
+为避免泄露，你应该确保所有的 goroutine 都能正确退出，有 2 个解决方法：
+
+- 使用带缓冲的 channel，确保能接收全部 goroutine 的返回结果：
+
+```go
+func First(query string, replicas ...Search) Result {  
+    c := make(chan Result,len(replicas))	
+    searchReplica := func(i int) { c <- replicas[i](query) }
+    for i := range replicas {
+        go searchReplica(i)
+    }
+    return <-c
+}
+```
+
+
+
+- 使用 `select` 语句，配合能保存一个缓冲值的 channel  `default` 语句：
+
+  `default` 的缓冲 channel  保证了即使结果 channel 收不到数据，也不会阻塞 goroutine
+
+```go
+func First(query string, replicas ...Search) Result {  
+    c := make(chan Result,1)
+    searchReplica := func(i int) { 
+        select {
+        case c <- replicas[i](query):
+        default:
+        }
+    }
+    for i := range replicas {
+        go searchReplica(i)
+    }
+    return <-c
+}
+```
+
+
+
+- 使用特殊的取消（cancellation） channel 来中断剩余 goroutine 的执行：
+
+```go
+func First(query string, replicas ...Search) Result {  
+    c := make(chan Result)
+    done := make(chan struct{})
+    defer close(done)
+    searchReplica := func(i int) { 
+        select {
+        case c <- replicas[i](query):
+        case <- done:
+        }
+    }
+    for i := range replicas {
+        go searchReplica(i)
+    }
+
+    return <-c
+}
+```
+
+Rob Pike 为了简化演示，没有提及演讲代码中存在的这些问题。不过对于新手来说，可能会不加思考直接使用。
+
+
+
+
 
 
 
