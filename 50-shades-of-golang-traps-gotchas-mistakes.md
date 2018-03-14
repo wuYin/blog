@@ -1,5 +1,5 @@
 ---
-title: Golang 新手要踩的 50 个坑
+title: Golang 新手可能会踩的 50 个坑
 date: 2018-03-07 12:15:00
 tags: Golang
 ---
