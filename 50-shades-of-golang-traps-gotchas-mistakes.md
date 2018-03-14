@@ -2609,12 +2609,10 @@ func main() {
  ![](http://p2j5s8fmr.bkt.clouddn.com/gosched.png)
 
 
+## 总结
 
+感谢原作者 [kcqon](https://twitter.com/kcqon) 总结的这篇博客，让我受益匪浅。
 
+由于译者水平有限，不免出现理解失误，望读者在下评论区指出，不胜感激。
 
-### 总结
-
----
-
-在
-
+后续再更新类似高质量文章的翻译 😍
