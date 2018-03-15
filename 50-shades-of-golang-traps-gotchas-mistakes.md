@@ -22,7 +22,7 @@ Go 是一门简单有趣的编程语言，与其他语言一样，在使用时�
 
 ## 初级篇：1-34
 
-### 1. 左大括号 `{` 不能单独放一行
+### 1. 左大括号 `{` 一般不能单独放一行
 
 在其他大多数语言中，`{` 的位置你自行决定。Go 比较特别，遵守分号注入规则（automatic semicolon injection）：编译器会在每行代码尾部特定分隔符后加 `;` 来分隔多条语句，比如会在 `)` 后加分号：
 
@@ -49,6 +49,18 @@ func main() {
 	println("hello world")
 }     
 ```
+
+注意代码块等特殊情况：
+```go
+// { 并不遵守分号注入规则，不会在其后边自动加分，此时可换行
+func main() {
+	{
+		println("hello world")
+	}
+}     
+
+```
+参考：[Golang中自动加分号的特殊分隔符](http://blog.csdn.net/icyday/article/details/8265864?hmsr=studygolang.com&utm_medium=studygolang.com&utm_source=studygolang.com)
 
 
 
