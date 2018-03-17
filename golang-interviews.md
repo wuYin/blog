@@ -20,7 +20,7 @@ tags: Golang
     ├── 操作系统
     ├── 数据库
     └── OOP 与设计模式
-└── Golang 面试题（待整理）   
+└── Golang 面试题  
 ```
 
 参考资料：[笔试面试知识整理](https://hit-alibaba.github.io/interview/)、[Golang 面试题解析](https://my.oschina.net/u/553243/blog)、[Go面试题答案与解析](https://yushuangqi.com/blog/2017/golang-mian-shi-ti-da-an-yujie-xi.html)
@@ -939,10 +939,81 @@ ACID 特性
 
 
 
+## Golang 面试题
+
+### 问答类
+
+#### 1. 在 Go 中如何使用多行字符串 ?
+
+使用反引号  \`\` 来包含多行字串，或使用 `+` 来连接多行字符串（注意换行会包含`\n`，缩进会包含 `\t`，空格没有转义符）：
+
+```go
+func main() {
+  str1 := `
+ line1
+  line2
+`
+  str2 := "\n line1\n\t" +
+    "line2\n"
+  fmt.Println(str1 == str2) // true
+}
+```
 
 
 
+#### 2. 如何获取命令行的参数 ?
 
+有两种方法：
+
+使用 `os` 库，如：
+
+```go
+func main() {
+  args := os.Args
+  if args == nil  { // 校验参数并输出提示信息
+    return
+  }
+  fmt.Printf("%T\n", args)
+  fmt.Printf("%v\n", args)
+}
+```
+可以看出 `os.Args` 接收到的参数是 string slice，元素分别是运行的程序名、多个参数值：
+
+![](http://p2j5s8fmr.bkt.clouddn.com/cmd-lines.png)
+
+
+使用 `flag` 库，步骤：
+
+  - 定义各个参数的类型、名字、默认值与提示信息
+  - 解析
+  - 获取参数值
+
+```go
+func main() {
+  name := flag.String("name", "", "Your name")
+  var age int
+  flag.IntVar(&age, "age", -1, "Your age")
+
+  flag.Parse()
+
+  println("name", *name)
+  println("age", age)
+}
+```
+
+注意上边获取参数值的两种方式，使用时也有所不同：
+
+```go
+func Int(name string, value string, usage string) *string // 返回地址
+func IntVar(p *int, name string, value int, usage string) // 修改第一个参数值
+```
+
+![](http://p2j5s8fmr.bkt.clouddn.com/flag-cmd-line.png)
+
+
+---
+
+Last updated at 2018-03-17 15:33
 
 
 
