@@ -943,25 +943,25 @@ ACID 特性
 
 ### 问答类
 
-#### 1. 在 Go 中如何使用多行字符串 ?
+#### 1. 在 Go 中如何使用多行字符串？
 
 使用反引号  \`\` 来包含多行字串，或使用 `+` 来连接多行字符串（注意换行会包含`\n`，缩进会包含 `\t`，空格没有转义符）：
 
 ```go
 func main() {
-  str1 := `
+    str1 := `
  line1
-  line2
+    line2
 `
-  str2 := "\n line1\n\t" +
-    "line2\n"
-  fmt.Println(str1 == str2) // true
+    str2 := "\n line1\n\t" +
+      "line2\n"
+    fmt.Println(str1 == str2) // true
 }
 ```
 
 
 
-#### 2. 如何获取命令行的参数 ?
+#### 2. 如何获取命令行的参数？
 
 有两种方法：
 
@@ -969,12 +969,12 @@ func main() {
 
 ```go
 func main() {
-  args := os.Args
-  if args == nil  { // 校验参数并输出提示信息
-    return
-  }
-  fmt.Printf("%T\n", args)
-  fmt.Printf("%v\n", args)
+    args := os.Args
+    if args == nil  { // 校验参数并输出提示信息
+        return
+    }
+    fmt.Printf("%T\n", args)
+    fmt.Printf("%v\n", args)
 }
 ```
 可以看出 `os.Args` 接收到的参数是 string slice，元素分别是运行的程序名、多个参数值：
@@ -990,14 +990,14 @@ func main() {
 
 ```go
 func main() {
-  name := flag.String("name", "", "Your name")
-  var age int
-  flag.IntVar(&age, "age", -1, "Your age")
+    name := flag.String("name", "", "Your name")
+    var age int
+    flag.IntVar(&age, "age", -1, "Your age")
 
-  flag.Parse()
+    flag.Parse()
 
-  println("name", *name)
-  println("age", age)
+    println("name", *name)
+    println("age", age)
 }
 ```
 
@@ -1010,10 +1010,302 @@ func IntVar(p *int, name string, value int, usage string) // 修改第一个参�
 
 ![](http://p2j5s8fmr.bkt.clouddn.com/flag-cmd-line.png)
 
+#### 3. 如何在不输出的情况下格式化字符串？
+
+使用 `func Sprintf(format string, a ...interface{}) string ` 即可，常用在手动组合 SQL 语句上：
+
+```go
+func main() {
+    fmt.Println(formatSQL(20))
+}
+
+func formatSQL(id int) string {
+    return fmt.Sprintf("SELECT * FROM users WHERE id=%d", id)
+}
+```
+
+
+
+
+
+#### 4. 如何交换两个变量的值？
+
+直接使用元组（tuple）赋值即可：
+
+```go
+a, b = b, a
+```
+
+注意元组赋值是对应有序赋值的：
+
+```go
+a, b, c = b, c, a // 交换三个变量的值
+
+a := 1
+b := 2
+a, b, a = b, a, b // a = 2, b = 1
+```
+
+
+
+
+
+#### 5. 如何复制 slice、map 和 interface 的值？
+
+slice：
+
+```go
+func main() {
+    names := []string{"Tom", "Jerry"}
+    nums := []string{"one", "two", "three"}
+    pNames := names   // 确认 names 被更新 
+
+    // names = nums   // 直接赋值
+      
+    // fmt.Println(copy(names, nums))   // 使用 copy
+    fmt.Println(names, nums, pNames)
+}
+```
+
+- 直接赋值, 底层数组将不会更新：
+
+![](http://p2j5s8fmr.bkt.clouddn.com/non-real-copy.png)
+
+- 使用 `copy()` 
+  返回值是 `min(len(names), len(src))`，只会拷贝前两个元素，pNames 的值显示 names 的底层数组已被覆盖更新：
+
+   ![](http://p2j5s8fmr.bkt.clouddn.com/slice-overload.png)
+
+map：
+
+最简单的方法，遍历所有 key：
+
+```go
+func main() {
+    src := map[string]bool{"key1": false, "key2": true}
+    dst := make(map[string]bool)
+
+    for key, value := range src { // 遍历所有 key
+        dst[key] = value
+    }
+    fmt.Println(dst)
+}
+```
+
+
+
+interface：
+
+Go 中没有内建的函数来直接拷贝 interface 的值，也不能直接赋值。如 2 个 struct 的字段完全一致，可以使用强制类型转换或反射来赋值。
+
+参考：[关于结构体复制问题](https://golangtc.com/t/57d133b4b09ecc163500015c)、[Copying Interface Values In Go](https://www.ardanlabs.com/blog/2016/05/copying-interface-values-in-go.html)
+
+
+
+
+
+#### 6. 下边两种 slice 的声明有何不同？哪种更好？
+
+```go
+var nums []int
+nums := []int{}
+```
+
+第一种如果不使用 nums，就不会为其分配内存，更好（不使用编译也不会通过）。
+
+
+
+
+
+### 写出程序运行输出的内容
+
+#### 1. 考察多个 defer 与 panic 的执行顺序
+
+```go
+func main() {
+    deferCall()
+}
+
+func deferCall() {
+    defer func() { fmt.Println("打印前") }()
+    defer func() { fmt.Println("打印中") }()
+    defer func() { fmt.Println("打印后") }()
+
+    panic("触发异常")
+}
+```
+
+defer 可以类比为析构函数，多个 defer 本身的执行是栈 LIFO 先进后出的顺序，代码抛出的 panic 如果在所有 defer 中都不使用 recover 恢复，则直接退出程序。
+
+如果手动使用 `os.Exit()` 退出，则 defer 不执行。
+
+
+![](http://p2j5s8fmr.bkt.clouddn.com/pro1.png)
+
+
+
+
+
+#### 2. 考察 defer 与 return 的执行顺序
+
+```go
+func main() {
+    fmt.Println(double1(5))
+    fmt.Println(double1(6))
+    fmt.Println()
+    fmt.Println(double2(5))
+    fmt.Println(double2(6))
+}
+
+// 匿名返回
+// 加倍参数，若结果超过 10 则还原
+func double1(v1 int) int {
+    var v2 int
+    defer func() {
+        if v2 > 10 {
+            v2 = v1 // v2 不会被修改
+        }
+    }()
+
+    v2 = v1 * 2
+    return v2 
+}
+
+// 有名返回
+func double2(v1 int)(v2 int) {
+    // v2 与函数一起被声明，在 defer 中能被修改
+    defer func() {
+        if v2 > 10 {
+          v2 = v1 // v2 被修改
+        } 
+    }() 
+
+    v2 = v1 * 2
+    return
+}
+```
+
+注意 `return var` 会分为三步执行：
+
+return 语句为 `var` 赋值
+
+  - 匿名返回值函数：先声明，再赋值
+  - 有名返回值函数：直接赋值
+
+检查是否存在 defer 语句：逆序执行多条 defer，有名返回函数可能会再次修改 `var`
+
+真正返回 `var` 到调用处
+
+![](http://p2j5s8fmr.bkt.clouddn.com/pro4.png)
+
+
+
+#### 3. 考察 goroutine 的传值方式
+
+```go
+func main() {
+    runtime.GOMAXPROCS(1) // 强制使多个 goroutine 串行执行
+    wg := sync.WaitGroup{}
+    wg.Add(10)
+
+    for i := 0; i < 5; i++ {
+        go func() {
+            fmt.Println("i: ", i)
+            wg.Done()
+        }()
+        // time.Sleep(1 * time.Second)  // 此时将顺序输出 1 2 3 4 5 
+    }
+
+  for i := 0; i < 5; i++ {
+      go func(i int) {
+          fmt.Println("i: ", i)
+          wg.Done()
+      }(i)
+  }
+  wg.Wait()
+}
+```
+
+第一个 for 循环：以极快的速度分配完 5 个 goroutine，此时 `i` 的值为 5，gouroutine 得到的 `i` 都是 5
+
+第二个 for 循环：每次都会将 `i` 的值拷贝一份传给 goroutine，得到的 `i` 不同，输出不同
+
+ ![](http://p2j5s8fmr.bkt.clouddn.com/pro5.png)
+
+
+
+
+
+#### 4. 考察 defer 参数的计算时机
+
+```go
+func main() {
+    a := 1
+    b := 2
+    defer add("A", a, add("B", a, b))
+    a = 0
+    defer add("C", a, add("D", a, b))
+    b = 1
+}
+
+
+func add(desc string, a, b int) int {
+    sum := a + b
+    fmt.Println(desc, a, b, sum)
+    return sum
+}
+```
+
+ defer 语句会计算好 func 的参数，再放入执行栈中。
+
+注意第 7 行：四个 defer func 的参数此时已是确定值，不再对 defer 中的 b 造成影响。
+
+ ![](http://p2j5s8fmr.bkt.clouddn.com/pro7.png)
+
+
+
+#### 5. 考察 Go 的组合
+
+```go
+type People struct{}
+
+func (p *People) ShowA() {
+    fmt.Println("people showA")
+    p.ShowB()
+}
+func (p *People) ShowB() {
+    fmt.Println("people showB")
+}
+
+
+type Teacher struct {
+    People
+}
+
+func (t *Teacher) ShowB() {
+    fmt.Println("teacher showB")
+}
+
+func main() {
+    t := Teacher{}
+    t.ShowB()
+    t.ShowA()
+}
+```
+
+第 13 行： `Teacher ` 通过嵌入 `People` 来获取了 `ShowA()` 和 `showB()`
+
+第 16 行：`Teacher` 实现并覆盖了 `showB()`
+
+第 24 行：调用未覆盖的 `showA()`，因为它的 receiver 依旧是 People，相当于 People 调用
+
+
+ ![](http://p2j5s8fmr.bkt.clouddn.com/pro6.png)
+
 
 ---
 
-Last updated at 2018-03-17 15:33
+Last updated at 2018-03-18 13:47
 
 
 
