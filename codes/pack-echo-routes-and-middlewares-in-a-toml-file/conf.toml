@@ -1,0 +1,6 @@
+[routes]
+"POST:/user/:id"="main.GetUserInfo"
+
+[validators]
+"/"=["main.AllValidatro1", "main.AllValidatro2"]
+"/admin"=["!main.AllValidatro2"]
