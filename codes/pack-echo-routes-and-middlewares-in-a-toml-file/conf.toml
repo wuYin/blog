@@ -1,6 +1,5 @@
 [routes]
-"POST:/user/:id"="main.GetUserInfo"
+"POST:/user"="main.UserInfoHandler.GetUserInfo"
 
 [validators]
-"/"=["main.AllValidatro1", "main.AllValidatro2"]
-"/admin"=["!main.AllValidatro2"]
+"/user"=["main.CommonValidator.CheckSession"]   # 若 handler 以 ! 开头则该特殊路由不使用该中间件
