@@ -329,7 +329,7 @@ run:
 
 
 
-### VesselService
+## VesselService
 
 上边的 consignment-service 负责记录货物的托运信息，现在创建第二个微服务 vessel-service 来选择合适的货轮来运送货物，关系如下：
 
@@ -337,7 +337,7 @@ run:
 
 consignment.json 文件中的三个集装箱组成的货物，目前可以通过 consignment-service 管理货物的信息，现在用 vessel-service 去检查货轮是否能装得下这批货物。
 
-#### 创建 protobuf 文件
+### 创建 protobuf 文件
 
 ```protobuf
 // vessel-service/proto/vessel/vessel.proto
@@ -375,7 +375,7 @@ message Response {
 }
 ```
 
-#### 创建 Makefile
+### 创建 Makefile 与 Dockerfile
 
 现在创建 `vessel-service/Makefile` 来编译项目：
 
@@ -392,8 +392,6 @@ run:
 
 注意第二个微服务运行在宿主主机（macOS）的 50052 端口，50051 已被第一个占用。
 
-#### 容器化
-
 现在创建 Dockerfile 来容器化 vessel-service：
 
 ```dockerfile
@@ -405,7 +403,9 @@ ADD vessel-service /app/vessel-service
 CMD ["./vessel-service"]
 ```
 
-#### 实现货船微服务
+
+
+### 实现货船微服务的逻辑
 
 ```go
 package main
@@ -477,7 +477,7 @@ func main() {
 
 
 
-#### 货运服务与货船服务交互
+### 货运服务与货船服务交互
 
 现在需要修改 `consignent-service/main.go`，使其作为客户端去调用 vessel-service，查看有没有合适的轮船来运输这批货物。
 
@@ -523,7 +523,7 @@ func (s *service) CreateConsignment(ctx context.Context, req *pb.Consignment, re
 // ...
 
 func main() {
-    // ...
+	// ...
 
 	// 解析命令行参数
 	server.Init()
@@ -541,7 +541,7 @@ func main() {
 
 
 
-#### 增加货物
+### 增加货物并运行
 
 更新 `consignment-cli/consignment.json` 中的货物，塞入三个集装箱，重量和容量都变大。
 
@@ -571,17 +571,15 @@ func main() {
 
 
 
-#### 运行效果
-
 至此，我们完整的将 consignment-cli，consignment-service，vessel-service 三者流程跑通了。
 
-客户端用户请求托运货物，货运服务向货船服务检查容量、重量是否超标，再托运：
+客户端用户请求托运货物，货运服务向货船服务检查容量、重量是否超标，再运送：
 
 ![2.3](http://p7f8yck57.bkt.clouddn.com/2018-05-22-101150.gif)
 
 
 
-### 总结
+## 总结
 
 本节中将更为易用的 go-micro 替代了 gRPC 同时进行了微服务的 Docker 化。最后创建了 vessel-service 货轮微服务来运送货物，并成功与货轮微服务进行了通信。
 
