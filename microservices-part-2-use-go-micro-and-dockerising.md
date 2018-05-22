@@ -323,13 +323,266 @@ run:
 
 #### 调用微服务
 
-执行 `make build && make run`
+执行 `make build && make run`，即可看到客户端成功调用 RPC：![2.2](http://p7f8yck57.bkt.clouddn.com/2018-05-22-091218.gif)
+
+注明：译者的代码暂时未把 Golang 集成到 Dockerfile 中，读者有兴趣可参考原文。
 
 
 
+### VesselService
+
+上边的 consignment-service 负责记录货物的托运信息，现在创建第二个微服务 vessel-service 来选择合适的货轮来运送货物，关系如下：
+
+![image-20180522174448548](http://p7f8yck57.bkt.clouddn.com/2018-05-22-094448.png)
+
+consignment.json 文件中的三个集装箱组成的货物，目前可以通过 consignment-service 管理货物的信息，现在用 vessel-service 去检查货轮是否能装得下这批货物。
+
+#### 创建 protobuf 文件
+
+```protobuf
+// vessel-service/proto/vessel/vessel.proto
+syntax = "proto3";
+
+package go.micro.srv.vessel;
+
+service VesselService {
+    // 检查是否有能运送货物的轮船
+    rpc FindAvailable (Specification) returns (Response) {
+    }
+}
+
+// 每条货轮的熟悉
+message Vessel {
+    string id = 1;          // 编号
+    int32 capacity = 2;     // 最大容量（船体容量即是集装箱的个数）
+    int32 max_weight = 3;   // 最大载重
+    string name = 4;        // 名字
+    bool available = 5;     // 是否可用
+    string ower_id = 6;     // 归属
+}
+
+// 等待运送的货物
+message Specification {
+    int32 capacity = 1;     // 容量（内部集装箱的个数）
+    int32 max_weight = 2;   // 重量
+}
+
+// 货轮装得下的话
+// 返回的多条货轮信息
+message Response {
+    Vessel vessel = 1;
+    repeated Vessel vessels = 2;
+}
+```
+
+#### 创建 Makefile
+
+现在创建 `vessel-service/Makefile` 来编译项目：
+
+```makefile
+build:
+	protoc -I. --go_out=plugins=micro:$(GOPATH)/src/shippy/vessel-service proto/vessel/vessel.proto
+	# dep 工具暂不可用，直接手动编译
+	GOOS=linux GOARCH=amd64 go build
+	docker build -t vessel-service .
+
+run:
+	docker run -p 50052:50051 -e MICRO_SERVER_ADDRESS=:50051 -e MICRO_REGISTRY=mdns vessel-service
+```
+
+注意第二个微服务运行在宿主主机（macOS）的 50052 端口，50051 已被第一个占用。
+
+#### 容器化
+
+现在创建 Dockerfile 来容器化 vessel-service：
+
+```dockerfile
+# 暂未将 Golang 集成到 docker 中
+FROM alpine:latest
+RUN mkdir /app
+WORKDIR /app
+ADD vessel-service /app/vessel-service
+CMD ["./vessel-service"]
+```
+
+#### 实现货船微服务
+
+```go
+package main
+
+import (
+	pb "shippy/vessel-service/proto/vessel"
+	"github.com/pkg/errors"
+	"context"
+	"github.com/micro/go-micro"
+	"log"
+)
+
+type Repository interface {
+	FindAvailable(*pb.Specification) (*pb.Vessel, error)
+}
+
+type VesselRepository struct {
+	vessels []*pb.Vessel
+}
+
+// 接口实现
+func (repo *VesselRepository) FindAvailable(spec *pb.Specification) (*pb.Vessel, error) {
+	// 选择最近一条容量、载重都符合的货轮
+	for _, v := range repo.vessels {
+		if v.Capacity >= spec.Capacity && v.MaxWeight >= spec.MaxWeight {
+			return v, nil
+		}
+	}
+	return nil, errors.New("No vessel can't be use")
+}
+
+// 定义货船服务
+type service struct {
+	repo Repository
+}
+
+// 实现服务端
+func (s *service) FindAvailable(ctx context.Context, spec *pb.Specification, resp *pb.Response) error {
+	// 调用内部方法查找
+	v, err := s.repo.FindAvailable(spec)
+	if err != nil {
+		return err
+	}
+	resp.Vessel = v
+	return nil
+}
+
+func main() {
+	// 停留在港口的货船，先写死
+	vessels := []*pb.Vessel{
+		{Id: "vessel001", Name: "Boaty McBoatface", MaxWeight: 200000, Capacity: 500},
+	}
+	repo := &VesselRepository{vessels}
+	server := micro.NewService(
+		micro.Name("go.micro.srv.vessel"),
+		micro.Version("latest"),
+	)
+	server.Init()
+
+	// 将实现服务端的 API 注册到服务端
+	pb.RegisterVesselServiceHandler(server.Server(), &service{repo})
+
+	if err := server.Run(); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
+}
+
+```
 
 
 
+#### 货运服务与货船服务交互
+
+现在需要修改 `consignent-service/main.go`，使其作为客户端去调用 vessel-service，查看有没有合适的轮船来运输这批货物。
+
+```go
+// consignent-service/main.go
+package main
+
+import (...)
+
+
+// 定义微服务
+type service struct {
+	repo Repository
+	// consignment-service 作为客户端调用 vessel-service 的函数
+	vesselClient vesselPb.VesselServiceClient
+}
+
+// 实现 consignment.pb.go 中的 ShippingServiceHandler 接口，使 service 作为 gRPC 的服务端
+func (s *service) CreateConsignment(ctx context.Context, req *pb.Consignment, resp *pb.Response) error {
+
+	// 检查是否有适合的货轮
+	vReq := &vesselPb.Specification{
+		Capacity:  int32(len(req.Containers)),
+		MaxWeight: req.Weight,
+	}
+	vResp, err := s.vesselClient.FindAvailable(context.Background(), vReq)
+	if err != nil {
+		return err
+	}
+
+	// 货物被承运
+	log.Printf("found vessel: %s\n", vResp.Vessel.Name)
+	req.VesselId = vResp.Vessel.Id
+	consignment, err := s.repo.Create(req)
+	if err != nil {
+		return err
+	}
+	resp.Created = true
+	resp.Consignment = consignment
+	return nil
+}
+
+// ...
+
+func main() {
+    // ...
+
+	// 解析命令行参数
+	server.Init()
+	repo := Repository{}
+	// 作为 vessel-service 的客户端
+	vClient := vesselPb.NewVesselServiceClient("go.micro.srv.vessel", server.Client())
+	pb.RegisterShippingServiceHandler(server.Server(), &service{repo, vClient})
+
+	if err := server.Run(); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
+}
+
+```
 
 
 
+#### 增加货物
+
+更新 `consignment-cli/consignment.json` 中的货物，塞入三个集装箱，重量和容量都变大。
+
+```json
+{
+  "description": "This is a test consignment",
+  "weight": 55000,
+  "containers": [
+    {
+      "customer_id": "cust001",
+      "user_id": "user001",
+      "origin": "Manchester, United Kingdom"
+    },
+    {
+      "customer_id": "cust002",
+      "user_id": "user001",
+      "origin": "Derby, United Kingdom"
+    },
+    {
+      "customer_id": "cust005",
+      "user_id": "user001",
+      "origin": "Sheffield, United Kingdom"
+    }
+  ]
+}
+```
+
+
+
+#### 运行效果
+
+至此，我们完整的将 consignment-cli，consignment-service，vessel-service 三者流程跑通了。
+
+客户端用户请求托运货物，货运服务向货船服务检查容量、重量是否超标，再托运：
+
+![2.3](http://p7f8yck57.bkt.clouddn.com/2018-05-22-101150.gif)
+
+
+
+### 总结
+
+本节中将更为易用的 go-micro 替代了 gRPC 同时进行了微服务的 Docker 化。最后创建了 vessel-service 货轮微服务来运送货物，并成功与货轮微服务进行了通信。
+
+不过货物数据都是存放在文件 consignment.json 中的，第三节我们将这些数据存储到 MongoDB 数据库中，并在代码中使用 ORM 对数据进行操作，同时使用 docker-compose 来统一 Docker 化后的两个微服务。
