@@ -4,11 +4,11 @@ date: 2018-05-12 14:54:54
 tags: 微服务
 ---
 
-Golang 实现微服务系列教程，共计 10 篇高质量文章。原文链接：[ewanvalentine.io](https://ewanvalentine.io/)，翻译已获作者授权。
+原文链接：[ewanvalentine.io](https://ewanvalentine.io/microservices-in-golang-part-2)，翻译已获作者 [Ewan Valentine ](https://twitter.com/Ewan_Valentine)授权。
+
+本节未细致介绍 Docker，更多可参考：[《第一本Docker书 修订版》](https://book.douban.com/subject/26780404/)
 
 <!-- more -->
-
-> 注：本节未细致介绍 Docker，更多可参考：[《第一本Docker书 修订版》](https://book.douban.com/subject/26780404/)
 
 
 
@@ -285,7 +285,7 @@ func main() {
 	cmd.Init()
 	// 创建微服务的客户端，简化了手动 Dial 连接服务端的步骤
 	client := pb.NewShippingServiceClient("go.micro.srv.consignment", microclient.DefaultClient)
-    ...
+	...
 }
 ```
 
