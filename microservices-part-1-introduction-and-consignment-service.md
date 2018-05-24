@@ -6,13 +6,11 @@ tags: 微服务
 
 
 
-Golang 实现微服务系列教程，共计 10 篇高质量文章。原文链接：[ewanvalentine.io](https://ewanvalentine.io/)，翻译已获作者授权。
+原文链接：[ewanvalentine.io](https://ewanvalentine.io/microservices-in-golang-part-1)，翻译已获作者授权。
+
+本节对 gRPC 的使用浅尝辄止，更多可参考：[gRPC 中 Client 与 Server 数据交互的 4 种模式](https://github.com/wuYin/grpc-modes)
 
 <!-- more -->
-
-> 注：本节对 gRPC 的使用浅尝辄止，更多可参考：[gRPC 中 Client 与 Server 数据交互的 4 种模式](https://github.com/wuYin/grpc-modes)
-
-
 
 ## 前言
 
