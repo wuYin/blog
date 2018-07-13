@@ -189,7 +189,7 @@ containers/
     container.go
 ```
 
-这种组织方式叫类别（domain）驱动，而不是 MVC 的功能驱动。
+这种组织方式叫领域（domain）驱动，而不是 MVC 的功能驱动。
 
 ### consignment-service 的重构
 
