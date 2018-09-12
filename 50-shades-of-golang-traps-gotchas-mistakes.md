@@ -1308,7 +1308,6 @@ func main() {
 	}
 
 	checkError(err)
-	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	checkError(err)
