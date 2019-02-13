@@ -210,7 +210,7 @@ func (list *ItemLinkedList) Head() *Node {
 
 ##### 测试用例：[linkedlist_test.go](https://github.com/wuYinBest/blog/blob/master/codes/golang-data-structure-linked-list/linkedlist_test.go)
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/testing-pass.png)
+ ![](https://contents.yinzige.com/testing-pass.png)
 
 
 

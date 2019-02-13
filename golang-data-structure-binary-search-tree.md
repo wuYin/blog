@@ -24,7 +24,7 @@ Golang 中二叉搜索树的实现及常用操作，数据结构系列原文：[
 - 树叶（Leaf）：无子节点的节点
 - 兄弟节点（sibling）：拥有相同父节点的子节点
 
-![](http://p2j5s8fmr.bkt.clouddn.com/concept.png)
+![](https://contents.yinzige.com/concept.png)
 
 
 
@@ -71,13 +71,13 @@ key 是各节点的位置在先序遍历中的序号，key 的值这里使用 in
 
   ​
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/bstree.png)
+ ![](https://contents.yinzige.com/bstree.png)
 
 
 
 `String()` 可视化树结构：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/visual-tree.png)
+ ![](https://contents.yinzige.com/visual-tree.png)
 
 
 
@@ -159,7 +159,7 @@ func search(node *Node, key int) bool {
 
 先递归查找，再删除节点。但在删除时需根据节点拥有子节点的数量，分如下 3 种情况：
 
-![](http://p2j5s8fmr.bkt.clouddn.com/remove-node.png)
+![](https://contents.yinzige.com/remove-node.png)
 
 ##### 代码实现
 

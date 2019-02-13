@@ -38,7 +38,7 @@ tags: Golang
 
 ## 计算机网络
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/layers.png)
+ ![](https://contents.yinzige.com/layers.png)
 
 - TCP / UDP 传输层：端到端的服务
 - IP 网络层：点到点的服务
@@ -235,7 +235,7 @@ URG: urgent 紧急
 
 ##### 过程：
 
- ![1](http://p2j5s8fmr.bkt.clouddn.com/handshake.png)
+ ![1](https://contents.yinzige.com/handshake.png)
 
 - 第一次握手：客户端请求建立连接
 
@@ -253,7 +253,7 @@ URG: urgent 紧急
 
 #### 四次挥手 Four-way handshake
 
-服务端和客户端均可主动断开连接：服务端、客户端均需确认对方无数据再发送 ![2](http://p2j5s8fmr.bkt.clouddn.com/wavehand.png)
+服务端和客户端均可主动断开连接：服务端、客户端均需确认对方无数据再发送 ![2](https://contents.yinzige.com/wavehand.png)
 
 - 第一次握手：无数据再发送，主动关闭连接
 
@@ -322,7 +322,7 @@ IPv4 用点分十进制表示，IP 地址 = 网络地址 + 主机地址（层次
 
 全零 `0.0.0.0` ：本主机、全一：`255.255.255.255` 当前子网的广播地址
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/ips.png)
+ ![](https://contents.yinzige.com/ips.png)
 
 A 类：8 - 1（0） = 7 位网络号
 
@@ -535,7 +535,7 @@ close()		// 关闭连接
 
 ### 排序
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/sorts.png)
+ ![](https://contents.yinzige.com/sorts.png)
 
 
 
@@ -550,7 +550,7 @@ close()		// 关闭连接
 
 #### 交换排序一：冒泡排序 
 
-![](http://p2j5s8fmr.bkt.clouddn.com/bubble-sort.gif)
+![](https://contents.yinzige.com/bubble-sort.gif)
 
 过程
  
@@ -576,7 +576,7 @@ close()		// 关闭连接
 
 #### 交换排序二：快速排序 
 
-![](http://p2j5s8fmr.bkt.clouddn.com/quick-sort.gif)
+![](https://contents.yinzige.com/quick-sort.gif)
 
 过程
 
@@ -599,7 +599,7 @@ close()		// 关闭连接
 
 #### 选择排序一：简单选择排序 
 
-![](http://p2j5s8fmr.bkt.clouddn.com/simple-selection-sort.gif)
+![](https://contents.yinzige.com/simple-selection-sort.gif)
 
 过程
 
@@ -633,7 +633,7 @@ close()		// 关闭连接
 
 ####  插入排序一：直接插入排序 
 
-![](http://p2j5s8fmr.bkt.clouddn.com/insert-directly-sort.gif)
+![](https://contents.yinzige.com/insert-directly-sort.gif)
 
 过程
 
@@ -653,7 +653,7 @@ close()		// 关闭连接
 
 #### 插入排序二：希尔排序
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/shell-sort.gif)
+ ![](https://contents.yinzige.com/shell-sort.gif)
 
 过程：选择一个固定（动态）的步长，对步长内的元素进行直接插入排序
 
@@ -667,7 +667,7 @@ close()		// 关闭连接
 
 #### 归并排序 
 
-![](http://p2j5s8fmr.bkt.clouddn.com/union-sort1.gif)
+![](https://contents.yinzige.com/union-sort1.gif)
 
 过程
 
@@ -686,7 +686,7 @@ close()		// 关闭连接
 
 ####  基数排序（非比较）
 
-![](http://p2j5s8fmr.bkt.clouddn.com/union-sort.gif)
+![](https://contents.yinzige.com/union-sort.gif)
 
 过程
 
@@ -979,7 +979,7 @@ func main() {
 ```
 可以看出 `os.Args` 接收到的参数是 string slice，元素分别是运行的程序名、多个参数值：
 
-![](http://p2j5s8fmr.bkt.clouddn.com/cmd-lines.png)
+![](https://contents.yinzige.com/cmd-lines.png)
 
 
 使用 `flag` 库，步骤：
@@ -1008,7 +1008,7 @@ func Int(name string, value string, usage string) *string // 返回地址
 func IntVar(p *int, name string, value int, usage string) // 修改第一个参数值
 ```
 
-![](http://p2j5s8fmr.bkt.clouddn.com/flag-cmd-line.png)
+![](https://contents.yinzige.com/flag-cmd-line.png)
 
 #### 3. 如何在不输出的情况下格式化字符串？
 
@@ -1069,12 +1069,12 @@ func main() {
 
 - 直接赋值, 底层数组将不会更新：
 
-![](http://p2j5s8fmr.bkt.clouddn.com/non-real-copy.png)
+![](https://contents.yinzige.com/non-real-copy.png)
 
 - 使用 `copy()` 
   返回值是 `min(len(names), len(src))`，只会拷贝前两个元素，pNames 的值显示 names 的底层数组已被覆盖更新：
 
-   ![](http://p2j5s8fmr.bkt.clouddn.com/slice-overload.png)
+   ![](https://contents.yinzige.com/slice-overload.png)
 
 map：
 
@@ -1140,7 +1140,7 @@ defer 可以类比为析构函数，多个 defer 本身的执行是栈 LIFO 先�
 如果手动使用 `os.Exit()` 退出，则 defer 不执行。
 
 
-![](http://p2j5s8fmr.bkt.clouddn.com/pro1.png)
+![](https://contents.yinzige.com/pro1.png)
 
 
 
@@ -1196,7 +1196,7 @@ return 语句为 `var` 赋值
 
 真正返回 `var` 到调用处
 
-![](http://p2j5s8fmr.bkt.clouddn.com/pro4.png)
+![](https://contents.yinzige.com/pro4.png)
 
 
 
@@ -1230,7 +1230,7 @@ func main() {
 
 第二个 for 循环：每次都会将 `i` 的值拷贝一份传给 goroutine，得到的 `i` 不同，输出不同
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/pro5.png)
+ ![](https://contents.yinzige.com/pro5.png)
 
 
 
@@ -1260,7 +1260,7 @@ func add(desc string, a, b int) int {
 
 注意第 7 行：四个 defer func 的参数此时已是确定值，不再对 defer 中的 b 造成影响。
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/pro7.png)
+ ![](https://contents.yinzige.com/pro7.png)
 
 
 
@@ -1300,7 +1300,7 @@ func main() {
 第 24 行：调用未覆盖的 `showA()`，因为它的 receiver 依旧是 People，相当于 People 调用
 
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/pro6.png)
+ ![](https://contents.yinzige.com/pro6.png)
 
 
 ---

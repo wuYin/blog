@@ -16,7 +16,7 @@ Golang 中链表的实现及常用操作，数据结构系列原文：[flaviocop
 
 区别哈希表与 Golang 的 map、PHP 中的关联数组：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/hash-table.png)
+ ![](https://contents.yinzige.com/hash-table.png)
 
 
 

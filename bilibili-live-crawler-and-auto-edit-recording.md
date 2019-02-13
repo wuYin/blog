@@ -22,17 +22,17 @@ tags: PHP
 
 ### 实现效果
 
-#### 弹幕抓取  <img width="80%" src="http://p2j5s8fmr.bkt.clouddn.com/crawler.png" />
+#### 弹幕抓取  <img width="80%" src="https://contents.yinzige.com/crawler.png" />
 
 
 
 #### 数据统计
 
-  <img width="70%" src="http://p2j5s8fmr.bkt.clouddn.com/visu.png" />
+  <img width="70%" src="https://contents.yinzige.com/visu.png" />
 
 
 
-#### 根据弹幕和礼物高峰生成的精彩剪辑 <img width="70%" src="http://p2j5s8fmr.bkt.clouddn.com/saved.png" />
+#### 根据弹幕和礼物高峰生成的精彩剪辑 <img width="70%" src="https://contents.yinzige.com/saved.png" />
 
 
 
@@ -128,13 +128,13 @@ Response:
 
 B 站和斗鱼一样，为传输直播数据自己设计了协议头部。需使用 [Wireshark](https://www.wireshark.org) 抓包分析协议的细节，才能将爬虫的请求伪装成浏览器的请求，连接弹幕服务器去爬取直播间的数据。
 
-找出弹幕服务器的 IP 地址：211.159.194.115 ![](http://p2j5s8fmr.bkt.clouddn.com/ping-live.png)
+找出弹幕服务器的 IP 地址：211.159.194.115 ![](https://contents.yinzige.com/ping-live.png)
 
 
 
 查看请求弹幕服务器的数据包：`ip.addr == 211.159.194.115`
 
-![](http://p2j5s8fmr.bkt.clouddn.com/packinit.png)
+![](https://contents.yinzige.com/packinit.png)
 
 前边三个包是我（10.0.1.34）与弹幕服务器（211.159.194.115）三次握手建立 TCP 连接的包。
 

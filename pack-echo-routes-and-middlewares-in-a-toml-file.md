@@ -29,7 +29,7 @@ tags: Golang
 - main 包下 recevier 为 `CommonValidator` 的 `CheckSession()` 中间件，做 Session 检测等验证
 - main 包下 recevier 为 `UserInfoHandler` 的 `GetUserInfo()` 处理器，做请求的业务处理
 
-  <img width="60%" src="http://p2j5s8fmr.bkt.clouddn.com/re-echo.png"/>
+  <img width="60%" src="https://contents.yinzige.com/re-echo.png"/>
 
 若真只有一个 `/user` 路由，直接在 server.go 中实现处理器和中间件即可。但在实际项目中往往有上百个路由和中间件，此时使用 conf.toml 来集中管理，将十分的方便。
 

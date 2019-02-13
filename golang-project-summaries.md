@@ -64,7 +64,7 @@ func checkError(err error, info string) {
 
 先来看我项目中进行了多少次错误处理，占了代码量的 8%，显然出现了代码冗余，仿佛回到了 C 的年代。
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/check-errors.png)
+ ![](https://contents.yinzige.com/check-errors.png)
 
 不过这也是 Golang 设计的优异之处，相比 PHP 的异常处理机制：
 

@@ -745,7 +745,7 @@ func main() {
 
 如果你去 [Go Playground](https://play.golang.org/) 重复运行上边的代码，输出是不会变的，只有你更新代码它才会重新编译。重新编译后迭代顺序是被打乱的：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/map-range.png)
+ ![](https://contents.yinzige.com/map-range.png)
 
 
 
@@ -949,7 +949,7 @@ func doIt(workerID int) {
 
 如下，`main()` 主程序不等两个 goroutine 执行完就直接退出了：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/goroutine-exits.png)
+ ![](https://contents.yinzige.com/goroutine-exits.png)
 
 常用解决办法：使用 "WaitGroup"  变量，它会让主程序等待所有 goroutine 执行完毕再退出。
 
@@ -983,7 +983,7 @@ func doIt(workerID int, done <-chan struct{}, wg sync.WaitGroup) {
 
 执行结果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/dead-goroutine.png)
+ ![](https://contents.yinzige.com/dead-goroutine.png)
 
 看起来好像 goroutine 都执行完了，然而报错：
 
@@ -1036,7 +1036,7 @@ func doIt(workerID int, ch <-chan interface{}, done <-chan struct{}, wg *sync.Wa
 
 运行效果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/right-goroutine.png)
+ ![](https://contents.yinzige.com/right-goroutine.png)
 
 
 
@@ -1062,7 +1062,7 @@ func main() {
 
 运行效果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/unbuffed-chan.png)
+ ![](https://contents.yinzige.com/unbuffed-chan.png)
 
 
 
@@ -1091,7 +1091,7 @@ func main() {
 
 运行结果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/channnel.png)
+ ![](https://contents.yinzige.com/channnel.png)
 
 针对上边有 bug 的这个例子，可使用一个废弃 channel `done` 来告诉剩余的  goroutine 无需再向 ch 发送数据。此时 `<- done` 的结果是 `{}`：
 
@@ -1119,7 +1119,7 @@ func main() {
 
  运行效果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/normal-channel.png)
+ ![](https://contents.yinzige.com/normal-channel.png)
 
 
 
@@ -1187,7 +1187,7 @@ func main() {
 ```
 
 运行效果：
- ![](http://p2j5s8fmr.bkt.clouddn.com/runns.png)
+ ![](https://contents.yinzige.com/runns.png)
 
 
 
@@ -1230,7 +1230,7 @@ func main() {
 
 运行结果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/change-origal.png)
+ ![](https://contents.yinzige.com/change-origal.png)
 
 
 
@@ -2121,7 +2121,7 @@ done
 
 运行效果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/file-open-errors.png)
+ ![](https://contents.yinzige.com/file-open-errors.png)
 
 
 
@@ -2480,7 +2480,7 @@ func main() {
 
 Go 编译器会根据变量的大小及其 "escape analysis" 的结果来决定变量的存储位置，故能准确返回本地变量的地址，这在 C/C++ 中是不行的。
 
-在 go build 或 go run 时，加入 -m 参数，能准确分析程序的变量分配位置： ![](http://p2j5s8fmr.bkt.clouddn.com/allocation.png)
+在 go build 或 go run 时，加入 -m 参数，能准确分析程序的变量分配位置： ![](https://contents.yinzige.com/allocation.png)
 
 
 
@@ -2545,7 +2545,7 @@ func main() {
 
 运行效果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/reorder.png)
+ ![](https://contents.yinzige.com/reorder.png)
 
 如果你想保持多 goroutine 像代码中的那样顺序执行，可以使用 channel 或 sync 包中的锁机制等。
 
@@ -2594,7 +2594,7 @@ func main() {
 
 可以添加 `-m` 参数来分析 `for` 代码块中调用的内联函数：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/not-inlined.png)
+ ![](https://contents.yinzige.com/not-inlined.png)
 
 
 
@@ -2617,7 +2617,7 @@ func main() {
 ```
 运行效果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/gosched.png)
+ ![](https://contents.yinzige.com/gosched.png)
 
 
 ## 总结

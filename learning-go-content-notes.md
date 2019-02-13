@@ -372,7 +372,7 @@ func main() {
 
 转换函数：
 
-![](http://p2j5s8fmr.bkt.clouddn.com/convert.png)
+![](https://contents.yinzige.com/convert.png)
 
 注意：
 
@@ -541,7 +541,7 @@ func ready(str string, sec int) {
 
 运行效果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/goroutine-run.png)
+ ![](https://contents.yinzige.com/goroutine-run.png)
 
 
 

@@ -14,7 +14,7 @@ tags: data structure
 
 运行效果：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/calculate.png)
+ ![](https://contents.yinzige.com/calculate.png)
 
 
 
@@ -36,7 +36,7 @@ tags: data structure
 
 中缀表达式 `1+2*3+(4*5+6)*7` 对应的后缀表达式： `123*+45*6+7*+`，计算机使用栈计算后缀表达式值：
 
-![](http://p2j5s8fmr.bkt.clouddn.com/process.png)
+![](https://contents.yinzige.com/process.png)
 
 
 
@@ -96,7 +96,7 @@ func calculate(postfix string) int {
 
  <br/>
 
-![](http://p2j5s8fmr.bkt.clouddn.com/get-postfix.png)
+![](https://contents.yinzige.com/get-postfix.png)
 
 #### 转换的代码实现
 

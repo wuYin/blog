@@ -15,7 +15,7 @@ tags: algorithms
 先来看一张图：
 
 
-![](http://p2j5s8fmr.bkt.clouddn.com/connectivity-example.png)
+![](https://contents.yinzige.com/connectivity-example.png)
 
 在这个彼此连接和断开的点网络中，我们可以找到一条 p 点到 q 点的路径。在计算机网络中判断两台主机是否连通、在社交网络中判断两个用户是否存在间接社交关系等，都可以抽象成连通性问题。
 
@@ -27,7 +27,7 @@ tags: algorithms
 
 如下图结点数 N = 5 的网络（使用 0 ~ N-1表示对象），可用整数对序列 `0-1  1-3  2-4` 来描述连通关系， 其中 0 和 3 也是连通的，存在两个连通分量：{0, 1, 3} 和 {2, 4}
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/5-nodes-example.png)
+ ![](https://contents.yinzige.com/5-nodes-example.png)
 
 问题：给定描述连通关系的整数对序列，任给其中两个整数 p 和 q，判断其是否能连通？
 
@@ -51,15 +51,15 @@ tags: algorithms
 6-1 	6-1
 ```
 
- 对应的连通图如下，黑线表示首次连接两个结点，绿线表示两结点已存在连通关系： ![](http://p2j5s8fmr.bkt.clouddn.com/integers-sequence.png)
+ 对应的连通图如下，黑线表示首次连接两个结点，绿线表示两结点已存在连通关系： ![](https://contents.yinzige.com/integers-sequence.png)
 
 
 
 #### 算法一：快速查找算法
 
-使用数组 `id[i]` 存储结点的值， `i` 为结点序号，即初始状态序号和数组值相同 ：  ![](http://p2j5s8fmr.bkt.clouddn.com/arrray.png)
+使用数组 `id[i]` 存储结点的值， `i` 为结点序号，即初始状态序号和数组值相同 ：  ![](https://contents.yinzige.com/arrray.png)
 
-当输入前两个连通关系后， `id[i]` 变化如下：  ![](http://p2j5s8fmr.bkt.clouddn.com/connect.png)
+当输入前两个连通关系后， `id[i]` 变化如下：  ![](https://contents.yinzige.com/connect.png)
 
 可以看出， `id[i]` 的值是完成连通后，`i` 连接到的终点结点。若 p 和 q 连通，则 `id[p]` 和 `id[q]` 值应相等。
 
@@ -132,7 +132,7 @@ func Union(p, q int) {
 
 ##### 运行效果：能判断 2-9 已存在连通关系
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/connect-run.png)
+ ![](https://contents.yinzige.com/connect-run.png)
 
 ##### 复杂度
 
@@ -168,7 +168,7 @@ func Union(p, q int) {
 
 注意红色的 `2-3`，不是直接把 2 作为 3 的子结点，而是找到 3 的根结点 9，合并 `2-3` 与 `3-4-9` ，生成 `2-9`
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/tree.png)
+ ![](https://contents.yinzige.com/tree.png)
 
 
 
@@ -209,11 +209,11 @@ func getRoot(i int) int {
 
 快速合并算法有一个缺陷：数据量很大时，任意合并子树，会导致树越来越高，在查找根结点时要遍历数组大部分的值，依旧会很慢。下图中判断 p、q 是否连通，就需要查找 13 个结点：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/big-tree.png)
+ ![](https://contents.yinzige.com/big-tree.png)
 
 如果树合并后的依旧比较矮，各子树之间平衡，则查找根结点会少遍历很多结点，下图中再判断 p、q 是否连通，只需查找 7 个结点：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/balance-tree.png)
+ ![](https://contents.yinzige.com/balance-tree.png)
 
 ##### 平衡树的构建
 
@@ -278,9 +278,9 @@ func Union(p, q int) {
 
 生成的树如下：
 
- ![](http://p2j5s8fmr.bkt.clouddn.com/special-tree.png)
+ ![](https://contents.yinzige.com/special-tree.png)
 
-此时判断 `9-2` 的连通关系，需要分别找到 9 和 2 的根结点。在寻找 9 的根结点时经过 6、3、1树，因为6、3、1树的子节点和 9 一样，根结点都是 0，所以直接把6、3、1树变成 0 的子树。如下： ![](http://p2j5s8fmr.bkt.clouddn.com/flat-tree.png)
+此时判断 `9-2` 的连通关系，需要分别找到 9 和 2 的根结点。在寻找 9 的根结点时经过 6、3、1树，因为6、3、1树的子节点和 9 一样，根结点都是 0，所以直接把6、3、1树变成 0 的子树。如下： ![](https://contents.yinzige.com/flat-tree.png)
 
 ##### 优化
 
