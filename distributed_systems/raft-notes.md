@@ -55,10 +55,11 @@ Raft 限制了只有收到大多数节点的投票，才能升级为 leader，�
 
 1. 选举超时时间到，切换为 candidate 身份
 2. currentTerm 自增 1
-3. 先给自己投 1 票，再并行地向其他节点发起 RequestVote RPC，候选人等待收选票过程中可能发生 3 种情况：
-- 收到了大多数节点的票：成功升级为 leader
-- 收到了本轮已选出 leader 的请求，则放弃选举变为 follower。如下图的 B 节点：
- 
+3. 给自己投一票
+4. 并行向其他节点发起 RequestVote RPC，候选人等待响应时可能发生 3 种情况：
+- 成功收到大多数节点的选票：升级为 leader
+- 收到本轮已选出 leader 的请求，则主动放弃竞选降为 follower。如下图的 B 节点：
+
  <img src="https://images.yinzige.com/2019-04-19-083231.png" width=70% />
 
 - 本轮选举超时了还没有收到大多数票，也没收到其他请求，就继续保持 candidate 身份，开启下一轮选举。
@@ -67,9 +68,14 @@ Raft 限制了只有收到大多数节点的投票，才能升级为 leader，�
 <img src="https://images.yinzige.com/2019-04-19-091229.png" width=80% />
 
 #### Raft 对投票者提出了三点要求
+
 - 每轮能投几张：一个任期内，一个节点只能投一张票
 - 是否要投：candidate 的日志至少要和自己的一样新（下节详述），才投票
 - 投给谁：first-come-first-served，投给第一个符合条件的 candidate
+
+#### 总体流程
+
+![](https://images.yinzige.com/2019-04-23-035725.png)
 
 
 ## 日志复制
