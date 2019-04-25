@@ -245,3 +245,7 @@ Raft 将集群中节点的状态分为 3 类：leader（领导）、follower（�
 [raft.github.io](<https://raft.github.io/>)
 [thesecretlivesofdata.com/raft](http://thesecretlivesofdata.com/raft)
 [一文搞懂Raft算法](https://www.cnblogs.com/xybaby/p/10124083.html)
+
+[Youtube: Raft lecture (Raft user study)](<https://www.youtube.com/watch?v=YbZ3zDzDnrw>) & 笔记：
+
+![](https://images.yinzige.com/raft-notes.png)
