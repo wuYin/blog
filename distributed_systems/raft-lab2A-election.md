@@ -10,8 +10,32 @@ tags: 分布式系统
 
 ## Lab2A
 Raft 将一致性问题分解成三个子问题：Leader 选举、日志复制、安全性保证，分别对应 Lab 的 2A, 2B, 2C，均可参考原论文图 2 中对 Raft 实现的简要总结。本小节实验目标：
-- 实现 Leader 选举：选出单个 leader 并保持领导地位，直到自己 crash
+- 实现 Leader 选举：选出单个 leader 并保持领导地位，直到自己 crash 或发生网络分区
 - 实现心跳通信：实现 leader 与其他节点的无日志 AppendEntries RPC 调用
+
+## 一些坑
+
+- RPC 调用超时
+
+  在分布式系统中，每次调用会有三种结果：成功、失败、超时。Lab 将 net rpc 库封装成 labrpc，通过隔离节点网络来模拟节点不可用。不可用节点的 RPC 调用超时会返回 `false`，但这里不能死等 labrpc 库不确定的超时时长（100ms，2s 等），应该在调用时使用 timer 有预期地控制超时（如固定 1s）
+  调用超时后，不必像论文中描述的无限次重试，应简化处理，直接认为超时。
+
+- 充分使用 sync 包来实现同步
+  AppendEntries RPC 用于心跳通信和日志同步，调用时机有两个：
+  - 定时心跳：leader 需在后台定期向其他节点发送 heartbeat，保持领导地位。同时在心跳还充当着日志同步的作用，当某个节点日志一致性检查失败后，会将冲突信息返回，leader 需将本地日志同步到该节点。
+  - 新日志同步：当客户端发来新命令时，leader 将日志 append 到本地后即响应（lab 与论文不同），随后立刻开始新日志的同步。
+  
+  要调用 AppendEntries 的地方很多，因而使用 sync.Cond 条件变量而非散落各处的 channel 来进行同步触发。
+
+- 一些时机
+
+  - 每个节点在收到有效 RPC 调用后要重置 Election Timer，即使 Leader 无需对自己进行 rpc 调用，但重置 Timer 也是必要的。
+  - 当节点收到更高 term 的 RPC 调用或响应时，要立刻回退到 follower 并重置 Timer，由于不能确信对方身份就是 Leader，所以 `voteFor` 要重置为 nil
+
+- 关于调试
+  改造 util.go 中 DPrintf() 来输出毫秒及调试信息，方便追溯系统的时序性等问题。如：
+
+  ![image-20190509090156921](https://images.yinzige.com/2019-05-09-010157.png)
 
 ## Leader 选举
 Lab 限制 leader 每秒最多发送 10 次心跳请求，实现时取心跳间隔为 100ms。相应的，选举超时时间应比心跳大一个量级左右，我实现时取 `400 + rand.Intn(4) * 100`，即 400~800ms 内的随机值，尽可能避免选举 split vote 情况。
@@ -28,50 +52,62 @@ Lab 限制 leader 每秒最多发送 10 次心跳请求，实现时取心跳间�
 
 ```go
 type Raft struct {
-	mu        sync.Mutex          // 共享锁
-	peers     []*labrpc.ClientEnd // 集群中的全部节点
-	persister *Persister          // 持久化工具
-	me        int                 // 本节点在 peers 中的索引
+	mu        sync.Mutex          // Lock to protect shared access to this peer's state
+	peers     []*labrpc.ClientEnd // RPC end points of all peers
+	persister *Persister          // Object to hold this peer's persisted state
+	me        int                 // this peer's index into peers[]
 
-	curTerm  int           // 节点目前的任期号
-	votedFor int           // 节点目前的投票对象
-	entries  []LogEntry    // 本地日志
-	state    PeerState     // 节点状态
-	timer    *RaftTimer    // 选举超时定时器
-	entryCh  chan LogEntry // 日志处理 channel
+	// persistent states
+	curTerm  int        // latest term server has seen(initialized to 0 on first boot, increases monotonically)
+	votedFor int        // candidateId that received vote in current term(or null if none)
+	logs     []LogEntry // log entries; each entry contains command for state machine, and term when entry was received by leader(first index is 1)
+
+	// implementation
+	state     PeerState
+	timer     *RaftTimer
+	syncConds []*sync.Cond  // every Raft peer has a condition, use for trigger AppendEntries RPC
 }
 ```
 
-每个节点在 `Make` 初始化时都选择时长随机的 RaftTimer，之后启动新的 goroutine 监听 timer 超时和 entryCh 心跳请求，当 RaftTimer 超时后，变身为候选人发起投票。
 
-** 代码实现：**
+
+每个节点在 `Make` 初始化时都选择时长随机的 RaftTimer，之后启动新的 goroutine 监听 election timer 超时：
+
 ```go
-// 投票参数
-type RequestVoteArgs struct {
-	Term        int // 候选人的任期号
-	CandidateId int // 候选人 id
-}
+go func() {
+	for {
+		select {
+		case <-rf.timer.t.C: // election timeout
+			rf.resetElectTimer() // this reset is necessary, reset it when timeout
+			rf.vote()
+		}
+	}
+}()
+```
 
-// 响应投票
-type RequestVoteReply struct {
-	Term        int  // 选民节点的任期号
-	VoteGranted bool // 是否赢得该选票
-}
 
-// 候选人发起投票
+
+timer 超时后，发起投票：
+
+```go
+// start vote
+// leader can start vote repeatedly, such as 2 nodes are crashed in 3 nodes cluster
+// leader should reset election timeout when heartbeat to prevent this
 func (rf *Raft) vote() {
+	pr("Vote|Timeout|%v", rf)
 	rf.curTerm++
 	rf.state = Candidate
 	rf.votedFor = rf.me
 
 	args := RequestVoteArgs{
 		Term:        rf.curTerm,
-		CandidateId: rf.me,
+		CandidateID: rf.me,
 	}
 	replyCh := make(chan RequestVoteReply, len(rf.peers))
 	var wg sync.WaitGroup
 	for i := range rf.peers {
 		if i == rf.me {
+			rf.resetElectTimer() // other followers will reset when receive valid RPC, leader same
 			continue
 		}
 
@@ -79,84 +115,90 @@ func (rf *Raft) vote() {
 		go func(server int) {
 			defer wg.Done()
 			var reply RequestVoteReply
-			if succ := rf.sendRequestVote(server, &args, &reply); !succ {
+			respCh := make(chan struct{})
+			go func() {
+				rf.sendRequestVote(server, &args, &reply)
+				respCh <- struct{}{}
+			}()
+			select {
+			case <-time.After(RPC_CALL_TIMEOUT): // 1s
 				return
+			case <-respCh:
+				replyCh <- reply
 			}
-			replyCh <- reply
 		}(i)
 	}
 	go func() {
 		wg.Wait()
-		close(replyCh) // 避免资源泄漏
+		close(replyCh) // avoid goroutine leak
 	}()
 
 	votes := 1
-	targetVotes := len(rf.peers)/2 + 1
+	majority := len(rf.peers)/2 + 1
 	for reply := range replyCh {
-		// 已有更新 leader，回退到 follower
-		if reply.Term > rf.curTerm {
-			rf.back2Follower(reply.Term)
+		if reply.Term > rf.curTerm { // higher term leader
+			pr("Vote|Higher Term:%d|%v", reply.Term, rf)
+			rf.back2Follower(reply.Term, VOTE_NIL)
 			return
 		}
 		if reply.VoteGranted {
 			votes++
 		}
 
-		// 如果选票已过半，不再等待已 crash 的节点调用超时
-		if votes >= targetVotes {
-			break
+		if votes >= majority { // if reach majority earlier, shouldn't wait crashed peer for timeout
+			rf.state = Leader
+			go rf.heartbeat()
+			go rf.sync()
+
+			pr("Vote|Win|%v", rf)
+			return
 		}
 	}
 
-	// 因 split vote 等原因未达到多数票
-	if votes < len(rf.peers)/2+1 {
-		rf.resetElectTimer()
-		return
-	}
-
-	// 成功当选，立刻发送心跳
-	rf.state = Leader
-	go rf.heartbeat()
+	// split vote
+	pr("Vote|Split|%v", rf)
+	rf.back2Follower(rf.curTerm, VOTE_NIL)
 }
 ```
-
-注意减少选举耗时：候选人收集选票过程中，实时计票过半后即可结束选举，而非等待所有请求都返回了才去计票。假设有的节点已 crash，那 RPC 调用将超时返回 false，超时时间为 100ms，若不立即结束选举，候选人将白白浪费 100ms 时间，也就无法及时选出 leader
-
 
 
 ### 响应投票
 Raft 对投票节点提出了三点要求：
 - 每轮能投几张：一个任期内，一个节点只能投一张票
-- 是否要投：候选人的日志至少要和自己的一样新，才投票
+- 是否要投：候选人的日志至少要和自己的一样新，才投票（Lab2B 实现日志的 up-to-date 比较）
 - 投给谁：first-come-first-served，投给第一个符合条件的候选人
 
-**代码实现（干净整洁的代码）：**
+**实现**
+
 ```go
+type RequestVoteArgs struct {
+	Term        int
+	CandidateID int
+}
+
+type RequestVoteReply struct {
+	Term        int
+	VoteGranted bool
+}
+
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
-	reply.Voter = rf.me
 	reply.Term = rf.curTerm
+	reply.VoteGranted = false
 
-	switch {
-	case args.Term < rf.curTerm: // 拒绝处理
-		reply.VoteGranted = false
-		return
-	case args.Term == rf.curTerm: // 每个任期只能投一票
-		if rf.votedFor == VOTE_NIL || rf.votedFor == args.CandidateId {
-			reply.VoteGranted = true
-			rf.votedFor = args.CandidateId
-			rf.back2Follower(args.Term)
-		}
-	case args.Term > rf.curTerm: // 直接投票
-		reply.VoteGranted = true
-		rf.votedFor = args.CandidateId
-		rf.back2Follower(args.Term)
+	if args.Term < rf.curTerm {
+		return // candidate expired
 	}
+	if args.Term > rf.curTerm {
+		rf.back2Follower(args.Term, VOTE_NIL)
+	}
+	// now the term are same
 
-	return
+	if rf.votedFor == VOTE_NIL || rf.votedFor == args.CandidateID {
+		reply.VoteGranted = true
+		rf.back2Follower(args.Term, args.CandidateID)
+	}
 }
 ```
-
-比较候选人与自己的日志将在 2B 中实现。
 
 
 
@@ -166,86 +208,84 @@ Raft 将客户端的命令封装为 log entry：
 
 ```go
 type LogEntry struct {
-	Index   int         // 日志索引号
-	Term    int         // 写入日志时节点的任期号
-	Command interface{} // 客户端命令
+	Term    int
+	Command interface{}
 }
 ```
 
 
 
 ### 心跳请求
-当候选人成功竞选为 leader 后要 **立刻** 给集群中其他节点发送心跳，避免有的节点也超时发起新一轮选举。
+当候选人成功竞选为 leader 后要 **立刻** 给集群中其他节点发送心跳，避免其他节点也超时发起新一轮选举。实现方案：获得多数票后，在后台为其他的所有 peer 启动同步日志的 goroutine，等待下一轮心跳 tick，这种广播方式最好使用 sync.Cond 条件变量来实现。
 
-**代码实现：**
+获得多数票后为所有节点准备 sync
+
 ```go
-// 心跳请求
-type AppendEntriesArgs struct {
-	Term         int        // leader 任期号
-	LeaderId     int        // leader id
-	PrevLogIndex int        // 暂时不用
-	PrevLogTerm  int        //
-	Entries      []LogEntry // 批量日志，心跳时为空
-}
+// leader sync logs to followers
+func (rf *Raft) sync() {
+	for i := range rf.peers {
+		if i == rf.me {
+			rf.resetElectTimer()
+			continue
+		}
 
-// 心跳响应
-type AppendEntriesReply struct {
-	Term int  // 节点任期号
-	Succ bool // 心跳是否成功响应
-}
+		go func(server int) {
+			for {
+				rf.mu.Lock()
+				rf.syncConds[server].Wait() // wait for trigger
 
-// leader 发送心跳
+				args := AppendEntriesArgs{
+					Term:         rf.curTerm,
+					LeaderID:     rf.me,
+					PrevLogIndex: 0,
+					PrevLogTerm:  0,
+					Entries:      nil, // heartbeat entries are empty
+				}
+				rf.mu.Unlock()
+
+				// do not depend on labrpc to call timeout(it may more bigger than heartbeat), so should be check manually
+				var reply AppendEntriesReply
+				respCh := make(chan struct{})
+				go func() {
+					rf.sendAppendEntries(server, &args, &reply)
+					respCh <- struct{}{}
+				}()
+				select {
+				case <-time.After(RPC_CALL_TIMEOUT): // After() with currency may be inefficient
+					continue
+				case <-respCh: // response succ
+				}
+
+				if reply.Term > rf.curTerm { // higher term
+					rf.back2Follower(reply.Term, VOTE_NIL)
+					return
+				}
+			}
+		}(i)
+	}
+}
+```
+
+同时开启心跳 tick，准备广播通知 sync
+
+```go
+// send heartbeat
 func (rf *Raft) heartbeat() {
-	t := time.NewTicker(HEARTBEAT_INTERVAL) // 100ms
+	ch := time.Tick(HEARTBEAT_INTERVAL)
 	for {
 		if !rf.isLeader() {
 			return
 		}
 
-		args := AppendEntriesArgs{
-			Term:         rf.curTerm,
-			LeaderId:     rf.me,
-			PrevLogIndex: 0,
-			PrevLogTerm:  0,
-			Entries:      nil, // 心跳时为空日志
-		}
-		replyCh := make(chan AppendEntriesReply, len(rf.peers))
-		var wg sync.WaitGroup
 		for i := range rf.peers {
 			if i == rf.me {
+				rf.resetElectTimer() // leader reset timer voluntary, so it won't elect again
 				continue
 			}
-			wg.Add(1)
 
-			go func(server int) {
-				defer wg.Done()
-				var reply AppendEntriesReply
-				if succ := rf.sendAppendEntries(server, &args, &reply); !succ {
-					return
-				}
-				replyCh <- reply
-			}(i)
+			rf.syncConds[i].Broadcast()
 		}
-		wg.Wait()
-		close(replyCh)
-
-		var lived int
-		for reply := range replyCh {
-			if reply.Term > rf.curTerm {
-				// 发现新 leader，如网络分区恢复
-				rf.back2Follower(reply.Term)
-				return
-			}
-			lived++
-		}
-
-		// 未收到来自大多数节点的心跳，重新开始选举
-		if lived < len(rf.peers)/2+1 {
-			rf.vote() // 重新开始投票
-			return
-		}
-
-		<-t.C
+		<-ch
 	}
 }
 ```
@@ -254,44 +294,27 @@ func (rf *Raft) heartbeat() {
 
 ### 响应心跳
 
-对于心跳请求，节点需对比任期号，并进行日志的一致性检查：
+对于心跳请求，节点暂时只需对比任期号，若 term 未过期则调用成功。2B 部分将实现日志的一致性检查：
 
 ```go
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
-	if len(args.Entries) > 0 {
-		log.Fatal("invalid entry in 2A")
-	}
-
 	reply.Term = rf.curTerm
+	reply.Succ = false
+
 	if rf.curTerm > args.Term {
-		reply.Succ = false
-		return
+		return // leader expired
 	}
 
-	// 检查双方日志的一致性
-	if i := len(rf.entries) - 1; i >= 0 {
-		switch {
-		case i < args.PrevLogIndex: // 本地少日志，让 leader nextIndex[i]-- 后再同步
-			reply.Succ = false
-			return
-		case i == args.PrevLogIndex:
-			if rf.entries[i].Term != args.PrevLogTerm { // term 不匹配
-				reply.Succ = false
-				return
-			}
-		case i > args.PrevLogIndex: // 强制删除
-			rf.entries = rf.entries[args.PrevLogIndex:]
-		}
-	}
-	rf.entries = append(rf.entries, args.Entries...)
-	rf.entryCh <- LogEntry{Term: args.Term}
-
+	rf.back2Follower(args.Term, VOTE_NIL)
 	reply.Succ = true
-	return
 }
 ```
 
 
+
+**2A 测试通过：**
+
+ <img src="https://images.yinzige.com/2019-05-09-012436.png" width=60% />
 
 ## 总结
 
@@ -299,43 +322,3 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 个人经验：对于分布式系统，调试时可在请求参数、响应结构中加入 debug 信息，用于追踪某次请求的处理过程和结果，梳理清楚了执行流程，再去针对性的解决问题。
 为了让代码更清爽，我把 raft.go 的代码按功能拆分为了 2 部分：vote 处理投票请求，enry 处理心跳请求。之后的两个实验小节将对应修改这两个文件。
  <img src="https://images.yinzige.com/2019-04-23-044741.png" width=40% />
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
