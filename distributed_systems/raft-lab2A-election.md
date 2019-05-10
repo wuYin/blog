@@ -17,7 +17,7 @@ Raft 将一致性问题分解成三个子问题：Leader 选举、日志复制�
 
 - RPC 调用超时
 
-  在分布式系统中，每次调用会有三种结果：成功、失败、超时。Lab 将 net rpc 库封装成 labrpc，通过隔离节点网络来模拟节点不可用。不可用节点的 RPC 调用超时会返回 `false`，但这里不能死等 labrpc 库不确定的超时时长（100ms，2s 等），应该在调用时使用 timer 有预期地控制超时（如固定 1s）
+  在分布式系统中，每次调用会有三种结果：成功、失败、超时。Lab 将 net rpc 库封装成 labrpc，通过隔离节点网络来模拟节点不可用。不可用节点的 RPC 调用超时会返回 `false`，但这里不能死等 labrpc 库不确定的超时时长（100ms，2s 等都有可能），应该在调用时使用 timer 有预期地控制超时（如固定两倍心跳，200ms）
   调用超时后，不必像论文中描述的无限次重试，应简化处理，直接认为超时。
 
 - 充分使用 sync 包来实现同步
@@ -314,7 +314,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 **2A 测试通过：**
 
- <img src="https://images.yinzige.com/2019-05-09-012436.png" width=60% />
+ <img src="https://images.yinzige.com/2019-05-10-035030.png" width=60% />
 
 ## 总结
 
