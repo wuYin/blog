@@ -29,8 +29,8 @@ tags: 分布式系统
 - **TestCount2B：检查无效通信的次数**
   正常情况下，超时无效的 RPC 调用不能过多。
 
-测试均通过：
-![image-20190509203922666](https://images.yinzige.com/2019-05-09-123923.png)
+测试均通过（但 backup 待优化）：
+![image-20190509203922666](https://images.yinzige.com/2019-05-10-085732.png)
 
 ### 实现思路
 
