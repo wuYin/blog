@@ -14,9 +14,9 @@ tags: 分布式系统
 
 2A 部分完成了基础的 Leader Election 和 Heartbeat 机制，2B 部分要完成 Log Replication，同时实现论文中 5.4.1 节选举限制机制来保证选举的安全性。 本节实验目标是通过 `test_test.go` 中的 *2B 测试用例：
 - **TestBasicAgree2B：实现最简单的日志复制**
-  对 leader 请求执行 3 个命令，五个节点均正常的情况下日志要能达成一致。
+  对 leader 请求执行命令，节点均正常的情况下日志要能达成一致。
 - **TestFailAgree2B：处理少部分节点失效**
-  三个节点组成的集群中，某个普通节点发生了网络分区后，剩余两个节点要能继续 commit 和 apply 命令，当该该节点的网络恢复后，要能正确处理它的 higher term
+  三个节点组成的集群中，某个普通节点发生了网络分区后，剩余两个节点要能继续 commit 和 apply 命令，当该隔离节点网络恢复后，要能正确处理它的 higher term
 - **TestFailNoAgree2B：处理大部分节点失效**
   在五个节点组成的集群中，若有三个节点失效，则 leader 处理的新命令都是 uncommit 的状态，也就不会 apply，但当三个节点的网络恢复后，要能根据日志新旧正确处理选举。
 - **TestConcurrentStarts2B：处理并发的命令请求**

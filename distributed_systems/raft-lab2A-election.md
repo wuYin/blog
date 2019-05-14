@@ -9,31 +9,39 @@ tags: 分布式系统
 <!-- more -->
 
 ## Lab2A
-Raft 将一致性问题分解成三个子问题：Leader 选举、日志复制、安全性保证，分别对应 Lab 的 2A, 2B, 2C，均可参考原论文图 2 中对 Raft 实现的简要总结。本小节实验目标：
+Raft 将一致性问题分解成三个子问题：Leader 选举、日志复制、安全性保证，在 Lab 的 2A, 2B 中实现，快照功能在 Lab3 实现，均可参考原论文图 2 中对 Raft 实现的简要总结。
+
+### 实验目标
 - 实现 Leader 选举：选出单个 leader 并保持领导地位，直到自己 crash 或发生网络分区
 - 实现心跳通信：实现 leader 与其他节点的无日志 AppendEntries RPC 调用
 
+### 测试用例
+
+- **TestInitialElection2A：**集群正常情况下保证单一 leader
+- **TestReElection2A：**处理好 leader 网络分区、多数节点失效造成 split vote 的情况。
+
+测试均通过：
+ <img src="https://images.yinzige.com/2019-05-10-035030.png" width=60% />
+
 ## 一些坑
 
-- RPC 调用超时
+### RPC 调用超时
 
-  在分布式系统中，每次调用会有三种结果：成功、失败、超时。Lab 将 net rpc 库封装成 labrpc，通过隔离节点网络来模拟节点不可用。不可用节点的 RPC 调用超时会返回 `false`，但这里不能死等 labrpc 库不确定的超时时长（100ms，2s 等都有可能），应该在调用时使用 timer 有预期地控制超时（如固定两倍心跳，200ms）
-  调用超时后，不必像论文中描述的无限次重试，应简化处理，直接认为超时。
+在分布式系统中，每次调用会有三种结果：成功、失败、超时。Lab 将 net rpc 库封装成 labrpc，通过隔离节点网络来模拟节点不可用。不可用节点的 RPC 调用超时会返回 `false`，但这里不能死等 labrpc 库不确定的超时时长（100ms，2s 均可能），应该在调用时使用 timer 有预期地控制超时（如稍大于心跳间隔：150ms）
+调用超时后，不必像论文中描述的无限次重试，应简化处理，直接认为调用失败。
 
-- 充分使用 sync 包来实现同步
-  AppendEntries RPC 用于心跳通信和日志同步，调用时机有两个：
-  - 定时心跳：leader 需在后台定期向其他节点发送 heartbeat，保持领导地位。同时在心跳还充当着日志同步的作用，当某个节点日志一致性检查失败后，会将冲突信息返回，leader 需将本地日志同步到该节点。
-  - 新日志同步：当客户端发来新命令时，leader 将日志 append 到本地后即响应（lab 与论文不同），随后立刻开始新日志的同步。
+### 充分使用 sync 包来实现同步
+AppendEntries RPC 用于心跳通信和日志同步，调用时机有两个：
+- 定时心跳：leader 需在后台定期向其他节点发送 heartbeat，保持领导地位。同时在心跳还充当着日志同步的作用，当某个节点日志一致性检查失败后，会将冲突信息返回，leader 需将本地日志同步到该节点。
+- 新日志同步：当客户端发来新命令时，leader 将日志 append 到本地后即响应（lab 与论文不同），随后立刻开始新日志的同步。
+要调用 AppendEntries 的地方很多，因而使用 sync.Cond 条件变量而非散落各处的 channel 来进行同步触发。
   
-  要调用 AppendEntries 的地方很多，因而使用 sync.Cond 条件变量而非散落各处的 channel 来进行同步触发。
+### 一些时机
+- 每个节点在收到有效 RPC 调用后要重置 Election Timer，即使 Leader 无需对自己进行 rpc 调用，但重置 Timer 也是必要的。
+- 当节点收到更高 term 的 RPC 调用或响应时，要立刻回退到 follower 并重置 Timer，由于不能确信对方身份就是 Leader，所以 `voteFor` 要重置为 nil
 
-- 一些时机
-
-  - 每个节点在收到有效 RPC 调用后要重置 Election Timer，即使 Leader 无需对自己进行 rpc 调用，但重置 Timer 也是必要的。
-  - 当节点收到更高 term 的 RPC 调用或响应时，要立刻回退到 follower 并重置 Timer，由于不能确信对方身份就是 Leader，所以 `voteFor` 要重置为 nil
-
-- 关于调试
-  改造 util.go 中 DPrintf() 来输出毫秒及调试信息，方便追溯系统的时序性等问题。如：
+### 关于调试
+  改造 util.go 中 DPrintf() 来输出毫秒及调试信息，方便追溯系统的时序性等问题。比如我的调试日志：
 
   ![image-20190509090156921](https://images.yinzige.com/2019-05-09-010157.png)
 
@@ -309,12 +317,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	reply.Succ = true
 }
 ```
-
-
-
-**2A 测试通过：**
-
- <img src="https://images.yinzige.com/2019-05-10-035030.png" width=60% />
 
 ## 总结
 
