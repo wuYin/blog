@@ -4,7 +4,7 @@ date: 2019-04-23 09:31:52
 tags: 分布式系统
 ---
 
-总结下 MIT6.824 Lab2A Raft 选主的实验笔记。本文代码：[MIT6.824/raft](<https://github.com/wuYin/MIT6.824/tree/master/raft>)
+总结 MIT6.824 Lab2A Raft 选主的实验笔记。
 
 <!-- more -->
 
