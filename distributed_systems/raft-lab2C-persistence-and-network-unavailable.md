@@ -1,5 +1,5 @@
 ---
-title: Lab2C. Raft 日志备份与不可靠网络处理
+title: Lab2C. Raft 日志持久化与不可靠网络处理
 date: 2019-05-23 19:34:18
 tags: 分布式系统
 ---
