@@ -4,13 +4,13 @@ date: 2019-09-17 20:26:14
 tags: Redis
 ---
 
-总结下 Redis 内存分配工具 zmalloc 的实现。
+总结 Redis 内存分配工具 zmalloc 的实现。
 
 <!-- more -->
 
 ## 前言
 
-因工作需要，最近在参考 [如何阅读 Redis 源码](http://blog.huangz.me/ diary/2014/how-to-read-redis-source-code.html)和[《Redis设计与实现》](https://book.douban.com/subject/25900156/)开始学习 [Redis3.0](https://github.com/huangz1990/redis-3.0-annotated) 的源码实现。
+因工作需要，最近在参考 [如何阅读 Redis 源码](http://blog.huangz.me/diary/2014/how-to-read-redis-source-code.html)和[《Redis设计与实现》](https://book.douban.com/subject/25900156/)开始学习 [Redis3.0](https://github.com/huangz1990/redis-3.0-annotated) 的源码实现。
 
 本文是 RoadMap 的 1.1 小节 “内存分配” 的学习笔记。本文代码：[zmalloc.c](https://github.com/wuYin/redis-3.0/blob/master/zmalloc.c)
 
@@ -18,7 +18,7 @@ tags: Redis
 
 ## Redis 内存分配
 
-查看头文件 [zmalloc.h](https://github.com/wuYin/redis-3.0/blob/master/zmalloc.h) 的函数原型声明，能找到 Redis 的内存操作函数有：
+查看头文件 [zmalloc.h](https://github.com/wuYin/redis-3.0/blob/master/zmalloc.h) 的函数原型声明，能找到 Redis 主要的内存操作函数有：
 
 ```c
 void *zmalloc(size_t size); // 内存分配，对应 malloc
@@ -31,9 +31,8 @@ void zfree(void *ptr); // 释放内存，对应 free
 
 ### zmalloc
 
-#### 源码分析
-
 ```c
+// size 是申请分配的字节数
 void *zmalloc(size_t size) {
     void *ptr = malloc(size + PREFIX_SIZE); // size + 8 + 内存对齐所需字节数 = 申请空间精确大小
 
@@ -49,7 +48,7 @@ void *zmalloc(size_t size) {
 }
 ```
 
-入参 `size` 是申请分配的字节数，其内存布局如下：
+### 内存布局
 
 ![image-20190917211507245](https://images.yinzige.com/2019-09-17-131507.png)
 
