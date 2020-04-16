@@ -2,25 +2,13 @@
 
 ```
 .
-├── algorithms          # 算法相关
+├── algorithms          # 算法
 ├── datastructures      # 数据结构
-├── bases               # 操作系统，计算机网络等基础
-├── distributed_systems # 分布式系统
-├── golang              # Go 语言相关
-├── php                 # PHP 语言相关
-├── microservices       # 微服务教程等
+├── bases               # 计算机基础
+├── distributed_systems # MIT 6.824 课程笔记
+├── golang              # Go
+├── php                 # PHP
+├── pulsar              # pulsar MQ
 ├── libraries           # 一些轮子的设计文档
 └── ...
 ```
-
-
-
-### Todo
-
-九月更新：Redis, Kubernetes, Etcd, RocksDB
-
-
-
-### 赞赏小站
-
- <img src="https://images.yinzige.com/2019-09-06-103659.jpg" width=30% />
