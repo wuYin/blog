@@ -72,7 +72,7 @@ Admin API：提供 API 查看和操作 FQN 内的资源。如 GET topic/stats，
 
 ## 2. Overview
 
-### 2.1 关键特性
+### 2.1  特性
 
 - 原生支持跨集群间数据复制
 - 百万级别的 topic 支持
@@ -83,7 +83,7 @@ Admin API：提供 API 查看和操作 FQN 内的资源。如 GET topic/stats，
 
 
 
-### 2.2 Messaging
+### 2.2  Messaging
 
 #### 2.2.1  消息体（Message）
 
@@ -382,7 +382,217 @@ non-persistent 模式下，producer 只管发，broker 也不回复 ACK，写吞
   producer.newMessage().deliverAfter(3L, TimeUnit.Minute).value("Hello Pulsar!").send();
   ```
 
-  
+
+
+---
+
+### 2.3  Architecture
+
+组件
+
+- brokers：负载均衡地从 producer 端接收消息并分发给 consumer，与 configuration store zk 交互执行协调任务，消息持久化到 bookkeeper
+- bookkeeper：多个 bookie 持久化消息。
+- zk：负责集群内部协调
+
+ <img src="https://images.yinzige.com/2020-04-20-070926.png" alt="Pulsar architecture diagram" style="zoom:55%;" />
+
+#### 2.3.1  Brokers
+
+- Broker 本身无状态 stateless，内部运行这两个子组件：
+  - HTTP Server：通过 REST API 方式执行 admin 操作，处理 Producer/Consumer 的 Topic Lookup 请求。
+  - Dispatcher：异步处理二进制协议请求的 TCP Server
+
+- Ledger Cache：为提高性能，Broker 直接从  write cache 中分发消息给 Consumer，若滞后的消息过多，才会从 Bookkeeper 读取。
+- Replicator：用 Pulsar Java Client 将 publish 本地集群的消息，republish 到异地集群。
+
+
+
+#### 2.3.2  Cluster
+
+单个集群包括：多个 brokers、一个 zk 集群做集群级的配置中心和协调服务、一组 bookies 做持久化。
+
+
+
+#### 2.3.3  元数据存储（Metadata store）
+
+- configuration store：tenants, namespace, 及其他需保持全局一致性的数据。
+- coordination：broker 与 topic 的 ownership，broker 负载报告，bookkeeper ledger 的元数据等。
+
+
+
+#### 2.3.4   持久化存储（Persistent storage）
+
+只要生产消息到达 broker，pulsar 会将未 ACK 的消息持久化存储，从而保证能送达 consumer
+
+
+
+#### 2.3.5  BookKeeper
+
+WAL 分布式日志系统，特性：
+
+-  使 pulsar 能使用多个独立日志，称为 ledger
+- 对于 entry replication 使用顺序存储，十分高效。
+- 保证各 failures 下的读一致性
+- 保证 IO 负载均摊到各 bookie
+- 水平扩展可线性增加容量和吞吐
+- bookies 被设计为支持上千 ledgers 的同时并发读写，多个磁盘一个用于 journal 日志，其他则负责存储，前者读后者写，读写隔离互不影响。
+
+注：consumer 的消费 cursor 也持久化存储在 bookkeeper
+
+broker 与 bookies 交互图：
+
+![Brokers and bookies](https://images.yinzige.com/2020-04-20-080232.png)
+
+
+
+#### 2.3.6  Ledgers
+
+append-only 的存储结构，每个 ledger 只能有一个 bookie writer，其 entries 在多个 bookie 间复制。语义很简单：
+
+- broker 能 create、append entries、close 掉  ledger
+
+- 不论是显式 close 还是 writer crash，close 后直接变为只读状态。
+- ledger 过期后自动从所有 bookie 副本上清除。
+
+##### 保证读一致性
+
+ledger 限制只能由一个 writer 进程追加写，无需达成共识故很高效。故障恢复后，recovery 进程确定 ledger 的最终状态，判定 last commit 的点，在此之前的日志对所有 ledger reader 看到的内容是一致的。
+
+##### Managed Leger
+
+在 ledgers 之上开发出了 managed ledger 提供单一的日志抽象，对应到单个 topic 来表示消息 stream，单个 writer 往 stream 上追加写，多个消费方在 stream 上移动 cursor 读。单个 managed ledger 内部有多个 ledgers：
+
+- failure 之后，旧 ledger 只读，只能开新 ledger 追加写
+- 当 ledger 上的 cursor 都消费完毕后会被周期性清理
+
+
+
+#### 2.3.7 Journal storage
+
+非易失持久化存储 bookkeeper 的事务日志。在 bookie 操作 ledger 之前，会预先确保描述本次操作的事务日志成功落盘。可配置 `journalMaxSizeMB`  滚动存储。
+
+
+
+#### 2.3.8  Pulsar proxy
+
+- 场景：k8s 部署等情况下 client 无法直连 broker 地址
+
+- 原理：全权转发 brokers 的数据。为提高容错性，proxy 数量无上限
+
+- 流程：proxy 从配置的 zk 中拉取 topic 到 broker 的 ownership，可配置具体某个集群、或全局
+
+  ```shell
+  > bin/pulsar proxy \
+    --zookeeper-servers zk-0,zk-1,zk-2 \
+    --configuration-store-servers zk-0,zk-1,zk-2
+  ```
+
+- 其他功能：加密、认证
+
+
+
+#### 2.3.9 Service discovery
+
+自己实现的 DNS，HTTP 服务发现需要能重定向到目标集群
+
+
+
+---
+
+### 3. Pulsar Clients
+
+客户端实现了重连、broker failover 对上层透明，消息入队发送等待 ACK，backoff 重试等等机制。
+
+#### 3.1 设置阶段（Setup）
+
+初始化 producer, consumer 时，客户端会进行 2 步设置：
+
+- 依次尝试向活跃的 broker 发送 HTTP Lookup 请求，broker 会从（缓存）的 zk 元数据中取出 ownership 找出服务该 topic 的 broker，若未找到则会尝试让负载最低的 broker 去处理。
+
+  注：此处 topic 为 partitioned topic，即不同分区被分到不同的单个 broker 处理。
+
+- 找到 topic partition 对应的 broker 后
+
+  - 建立长连接（或直接复用连接池中已有连接）并认证
+  - 通过内置二进制协议交换命令
+  - client 创建 producer / consumer
+
+当 TCP 连接意外断开后，客户端会直接重新 Setup 并指数 backoff 重试直到成功。
+
+
+
+#### 3.2  Reader 接口
+
+##### 3.2.1  Consumer 接口
+
+标准的 `consumer` 接口包括：监听 topics（正则匹配消费），消费消息，处理完毕后回复 ACK。默认新的 subscription 从 latest 开始读，已存在的 subscription 则从最早 unack 的消息开始消费。
+
+总结：实现 `consumer` 接口的消费者，其 cursor 由 ACK 机制 broker 代管，存于 bookie 中。
+
+##### 3.2.2  Reader 接口
+
+可通过 reader 接口自己管理 cursor，使用 reader 读取 topic 时必须指定要从哪条消息开始读，3 种指定：
+
+- earliest、latest
+- 精确指定 message ID 读取，此 msg id 可从旧消费记录中加载、
+
+reader 接口能实现 **effectively-once** 语义消费，用在需要 rewind 重新消费的流处理场景中。
+
+注：在 client 内部，reader 被实现为 exclusive、非持久化、名字随机 subscription 的 consumer
+
+ <img src="https://images.yinzige.com/2020-04-20-102637.png" alt="The Pulsar consumer and reader interfaces" style="zoom:40%;" />
+
+##### 3.2.3 DEMO
+
+reader 需自行保存 byteArray 的 `messageId`，无需 acknowledge
+
+```java
+void produce() throws PulsarClientException {
+    Producer<String> producer = client.newProducer(Schema.STRING)
+            .topic(TOPIC_NAME)
+            .create();
+    for (int i = 0; i < 10; i++) {
+        MessageId mid = producer.send("MESSAGE_" + i);
+        logger.error("send: {}", "MESSAGE_" + i);
+        if (i == 4) {
+            this.lastMsgId = mid.toByteArray();
+        }
+    }
+    producer.close();
+}
+
+void read() throws IOException {
+    Reader<String> reader = client.newReader(Schema.STRING)
+            .topic(TOPIC_NAME)
+//          .startMessageId(MessageId.earliest) // or MessageId.latest
+            .startMessageId(MessageId.fromByteArray(this.lastMsgId))
+            .create();
+    while (true) {
+        Message msg = reader.readNext();
+        logger.error("[reader]: " + msg.getKey() + "->" + msg.getValue());
+    }
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
