@@ -246,9 +246,7 @@ static void h_conn(const int fd, const short which, Conn *c)
         epollq_apply();
         return;
     }
-    if (which == 'h') {
-        c->halfclosed = 1;
-    }
+    if (which == 'h') c->halfclosed = 1;
 
     // 1. 根据 conn 的 state 指导下一步 IO 操作
     conn_process_io(c);
@@ -270,6 +268,31 @@ static void h_conn(const int fd, const short which, Conn *c)
 
 
 
-## 5. 总结
+## 5. WAL
 
-尽管 beanstalk 是单线程，但使用了 epoll 进行事件处理，仍能高效应对高并发场景。此外高效利用合适的数据结构实现 feature，IO 读写时的缓存 trick，都很值得学习。
+### 5.1 读流程
+
+![](https://images.yinzige.com/20201218214746.png)
+
+- 锁定 binlog dir 下的 lock 文件后，扫描 binlog.XXX 获取 [min, max] 连续序号区间
+- 按协议读取 [tube_name, job_rec, job_body] 创建 tube 并还原 job，插入临时 job_list
+- 遍历 job_list 重建 ready, delayed 堆，buried 链表
+- 开启 binlog_[max+1] 作为下一个 WAL 文件
+
+### 5.2 写流程
+
+![](https://images.yinzige.com/20201218214646.png)
+
+- put 新 job 时，完整的 job 数据会被写入 os File，同时插入到 File 的 job_list
+- 其他 op 若更新了 job 的状态，会将新的 job_rec 追加到 os File
+  delete job 时，会额外将 job 从 job_list 中移除，并减少所在 File 的引用计数。
+
+- GC：job 被删除或被读取时，会递减 File 的引用计数，当递减为 0 时，会尝试，注意只是尝试触发 WAL 释放该 os FIle* 资源（WAL 从 head 到 tail 有序处理 File*）
+- rollover：当 WAL.cur.resv 剩余可用空间不足时，会创建新的 File 作 WAL
+- compact：每次 WAL.cur write 新 job 时，都会触发 1 次 compact，把 WAL.head 最老 job 追加到 cur File 
+
+## 6. 总结
+
+优点：尽管 beanstalk 是单线程，但使用了 epoll 进行事件处理，仍能高效应对高并发场景。高效利用合适的数据结构实现 feature，IO 读写时的缓存 trick 都值得学习。此外还实现了 WAL 异步刷盘，保证重启后 replay binlog 完整重建 server 状态。 
+
+缺点：WAL 仅持久化到本地磁盘，若物理损坏会彻底丢失数据，真正的高可用底层依赖 ceph 等分布式文件系统。此外，单线程的设计至始至终都只能用到 1 个核心，无法并发 replay 大量 binlong，此时 replay 很耗时。 
